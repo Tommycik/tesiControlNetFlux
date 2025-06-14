@@ -37,7 +37,7 @@ def main():
         "--train_batch_size", "1",
         "--gradient_accumulation_steps", "4",
         "--gradient_checkpointing",
-        "--use_8bit_adam"
+        "--use_8bit_adam",
         "--set_grads_to_none",
         "--report_to", "wandb",
         "--push_to_hub",
