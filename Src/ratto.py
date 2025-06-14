@@ -27,15 +27,20 @@ def main():
         "--image_column", "image",
         "--caption_column", "prompt",
         "--resolution", "512",
-        "--train_batch_size", "1",
         "--learning_rate", "1e-5",
-        "--max_train_steps", "3",
-        "--checkpointing_steps", "2",
-        "--validation_steps", "2",
-        "--mixed_precision" , "bf16",
+        "--max_train_steps", "10000",
+        "--checkpointing_steps", "200",
+        "--validation_steps", "100",
+        "--mixed_precision", "fp16",
         "--validation_image", "controlnet_dataset/sample_0000.jpg",
         "--validation_prompt", "red circle with blue background cyan circle with brown floral background",
-        "--gradient_accumulation_steps", "1 ",
+        "--train_batch_size", "1",
+        "--gradient_accumulation_steps", "4",
+        "--gradient_checkpointing",
+        "--use_8bit_adam"
+        "--set_grads_to_none",
+        "--report_to", "wandb",
+        "--push_to_hub",
     ]
 
     print("Esecuzione comando Accelerate:")
