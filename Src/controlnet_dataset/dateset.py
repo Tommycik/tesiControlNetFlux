@@ -20,7 +20,7 @@ class MyControlNetDataset(GeneratorBasedBuilder):
         ]
 
     def _generate_examples(self, data_dir):
-        metadata_path = os.path.join(data_dir, "metadata.json")
+        metadata_path = os.path.join(data_dir, "dataset.json")
         with open(metadata_path, "r") as f:
             metadata = json.load(f)
 
