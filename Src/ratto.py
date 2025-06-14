@@ -1,5 +1,5 @@
 from huggingface_hub import login
-
+from datasets import load_dataset
 import os
 import subprocess
 os.environ["HF_TOKEN"] = "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"
@@ -10,7 +10,8 @@ login(token="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")
 def main():
     # Percorsi dataset e output
     output_dir = "modle"
-
+    dataset = load_dataset("./my_controlnet_dataset")
+    print(dataset["train"][0])
     # Nome base modello
     pretrained_model = "black-forest-labs/FLUX.1-dev"
     controlnet_pretrained = 'InstantX/FLUX.1-dev-Controlnet-Canny'
