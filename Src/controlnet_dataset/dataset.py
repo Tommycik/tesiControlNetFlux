@@ -27,6 +27,6 @@ class MyControlNetDataset(GeneratorBasedBuilder):
         for idx, sample in enumerate(metadata):
             yield idx, {
                 "image": os.path.join(data_dir, sample["image"]),
-                "conditioning_image": os.path.join(data_dir, sample["conditioning_image"]),
+                "conditioning_image": os.path.join(data_dir, sample["condition_image"]),
                 "prompt": sample["prompt"]
             }
