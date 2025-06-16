@@ -14,7 +14,7 @@ class MyControlNetDataset(GeneratorBasedBuilder):
         )
 
     def _split_generators(self, dl_manager):
-        data_dir = "./controlnet_dataset"  # hardcode for testing
+        data_dir = dl_manager.download_and_extract(self.config.data_dir)
         return [
             SplitGenerator(name=Split.TRAIN, gen_kwargs={"data_dir": data_dir}),
         ]
