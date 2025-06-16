@@ -26,6 +26,7 @@ def main():
         "--conditioning_image_column", "conditioning_image",
         "--image_column", "image",
         "--caption_column", "prompt",
+        "--dataset_name", "./controlnet_dataset",
         "--resolution", "512",
         "--learning_rate", "1e-5",
         "--max_train_steps", "10000",
