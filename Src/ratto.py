@@ -29,7 +29,7 @@ def main():
         "--jsonl_for_train", "./controlnet_dataset/dataset.jsonl",
         "--resolution", "512",
         "--learning_rate", "1e-5",
-        "--max_train_steps", "10000",
+        "--max_train_steps", "500",
         "--checkpointing_steps", "200",
         "--validation_steps", "100",
         "--mixed_precision", "fp16",
