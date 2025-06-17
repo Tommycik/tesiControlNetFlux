@@ -23,7 +23,7 @@ def main():
         "--pretrained_model_name_or_path", pretrained_model,
         "--controlnet_model_name_or_path", controlnet_pretrained,
         "--output_dir", output_dir,
-        "--conditioning_image_column", "conditioning_image",
+        "--conditioning_image_column", "condition_image",
         "--image_column", "image",
         "--caption_column", "prompt",
         "--jsonl_for_train", "./controlnet_dataset/dataset.jsonl",
