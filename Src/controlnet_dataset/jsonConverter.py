@@ -6,7 +6,7 @@ with open("dataset.json", "r") as f:
 
 for item in data:
     if "image" in item:
-        item["image"] = os.path.join("controlnet_dataset", item["image"])
+        item["image"] = os.path.join("./controlnet_dataset", item["image"])
     if "condition_image" in item:
         item["condition_image"] = os.path.join("./controlnet_dataset", item["condition_image"])
 
