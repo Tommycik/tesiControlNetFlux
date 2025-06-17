@@ -40,7 +40,6 @@ def main():
         "--gradient_checkpointing",
         "--use_8bit_adam",
         "--set_grads_to_none",
-        "--report_to", "wandb",
         "--push_to_hub",
     ]
 
