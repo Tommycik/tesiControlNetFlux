@@ -10,8 +10,8 @@ login(token="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")
 def main():
     # Percorsi dataset e output
     output_dir = "modle"
-    dataset = load_dataset("./controlnet_dataset/dataset.py", data_dir="./controlnet_dataset")
-    print(dataset["train"].column_names)
+    #dataset = load_dataset("./controlnet_dataset/dataset.py", data_dir="./controlnet_dataset")
+    #print(dataset["train"].column_names)
     # Nome base modello
     pretrained_model = "black-forest-labs/FLUX.1-dev"
     controlnet_pretrained = 'InstantX/FLUX.1-dev-Controlnet-Canny'
@@ -25,7 +25,7 @@ def main():
         "--output_dir", output_dir,
         "--conditioning_image_column", "conditioning_image",
         "--image_column", "image",
-        "--caption_column", "prompt",
+        "--jsonl_for_train", "prompt",
         "--dataset_name", "./controlnet_dataset",
         "--resolution", "512",
         "--learning_rate", "1e-5",
