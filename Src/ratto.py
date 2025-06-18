@@ -5,7 +5,7 @@ import subprocess
 os.environ["HF_TOKEN"] = "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"
 token = os.environ["HF_TOKEN"]
 
-login(token="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")
+login(token)
 def main():
     # Percorsi dataset e output
     output_dir = "model"
