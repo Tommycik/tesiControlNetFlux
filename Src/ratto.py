@@ -3,13 +3,12 @@ from datasets import load_dataset
 import os
 import subprocess
 os.environ["HF_TOKEN"] = "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"
-os.environ['HF_HOME'] = 'modle'
 token = os.environ["HF_TOKEN"]
 
 login(token="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")
 def main():
     # Percorsi dataset e output
-    output_dir = "modle"
+    output_dir = "model"
     #dataset = load_dataset("./controlnet_dataset/dataset.py", data_dir="./controlnet_dataset")
     #print(dataset["train"].column_names)
     # Nome base modello
@@ -29,9 +28,9 @@ def main():
         "--jsonl_for_train", "./controlnet_dataset/dataset.jsonl",
         "--resolution", "512",
         "--learning_rate", "1e-5",
-        "--max_train_steps", "500",
-        "--checkpointing_steps", "200",
-        "--validation_steps", "100",
+        "--max_train_steps", "50",
+        "--checkpointing_steps", "10",
+        "--validation_steps", "10",
         "--mixed_precision", "fp16",
         "--validation_image", "controlnet_dataset/sample_0000.jpg",
         "--validation_prompt", "red circle with blue background cyan circle with brown floral background",
@@ -41,12 +40,24 @@ def main():
         "--use_8bit_adam",
         "--set_grads_to_none",
         "--push_to_hub",
+        "--hub_model_id", "tommycik/controlFlux"
     ]
 
     print("Esecuzione comando Accelerate:")
     print(" ".join(command))
 
     subprocess.run(command)
+
+    if result.returncode == 0:
+        original_model_path = os.path.join(output_dir, "pytorch_model.bin")
+        target_model_path = os.path.join(output_dir, "diffusion_pytorch_model.fp32.bin")
+        if os.path.exists(original_model_path):
+            os.rename(original_model_path, target_model_path)
+            print(f"Model file renamed to: {target_model_path}")
+        else:
+            print("Warning: Expected model file 'pytorch_model.bin' not found.")
+    else:
+        print("Training script failed. Skipping model rename.")
 
 if __name__ == "__main__":
     main()
