@@ -2,6 +2,9 @@ from huggingface_hub import login
 from datasets import load_dataset
 import os
 import subprocess
+from safetensors.torch import load_file
+import torch
+import shutil
 
 #login(token = "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")
 def main():
@@ -49,16 +52,17 @@ def main():
 
     result = subprocess.run(command)
     
-    if result.returncode == 0:
-        original_model_path = os.path.join(output_dir, "pytorch_model.bin")
-        target_model_path = os.path.join(output_dir, "diffusion_pytorch_model.fp32.bin")
-        if os.path.exists(original_model_path):
-            os.rename(original_model_path, target_model_path)
-            print(f"Model file renamed to: {target_model_path}")
-        else:
-            print("Warning: Expected model file 'pytorch_model.bin' not found.")
-    else:
-        print("Training script failed. Skipping model rename.")
+    # Load safetensors file
+    safetensor_path = "model/diffusion_pytorch_model.safetensors"
+    state_dict = load_file(safetensor_path)
+    
+    # Save as PyTorch .bin format
+    torch.save(state_dict, "model/diffusion_pytorch_model.fp32.bin")
+    
+    # Also rename the safetensor file with the expected name
+    shutil.copy(safetensor_path, "model/diffusion_pytorch_model.fp32.safetensors")
+    
+    print("✅ Conversion complete: both .fp32.safetensors and .fp32.bin generated.")
 
 if __name__ == "__main__":
     main()
