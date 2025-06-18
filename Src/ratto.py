@@ -36,7 +36,6 @@ def main():
         "--checkpointing_steps", "1",
         "--validation_steps", "1",
         "--mixed_precision", "bf16",
-        "--variant", "fp32",
         "--validation_image", "controlnet_dataset/sample_0000.jpg",
         "--validation_prompt", "transparent glass with stripes on the bottom on white background",
         "--train_batch_size", "1",
