@@ -3,7 +3,7 @@ from datasets import load_dataset
 import os
 import subprocess
 
-login(token = "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")
+login(token = "hf_oTixIouaIdrVHBmfCjmXeHaJyMbHteOMEZt")
 def main():
     # Percorsi dataset e output
     output_dir = "model"
