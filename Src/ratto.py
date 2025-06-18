@@ -3,8 +3,11 @@ from datasets import load_dataset
 import os
 import subprocess
 
-login(token = "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")
+#login(token = "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")
 def main():
+    #token hugginface
+    user_input = input("Enter token: ")
+    login(token = user_input)
     # Percorsi dataset e output
     output_dir = "model"
     #dataset = load_dataset("./controlnet_dataset/dataset.py", data_dir="./controlnet_dataset")
