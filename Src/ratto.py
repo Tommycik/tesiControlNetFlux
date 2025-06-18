@@ -46,8 +46,8 @@ def main():
     print("Esecuzione comando Accelerate:")
     print(" ".join(command))
 
-    subprocess.run(command)
-
+    result = subprocess.run(command)
+    
     if result.returncode == 0:
         original_model_path = os.path.join(output_dir, "pytorch_model.bin")
         target_model_path = os.path.join(output_dir, "diffusion_pytorch_model.fp32.bin")
