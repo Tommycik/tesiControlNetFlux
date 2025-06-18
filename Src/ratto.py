@@ -34,7 +34,7 @@ def main():
         "--validation_steps", "10",
         "--mixed_precision", "fp16",
         "--validation_image", "controlnet_dataset/sample_0000.jpg",
-        "--validation_prompt", "red circle with blue background cyan circle with brown floral background",
+        "--validation_prompt", "transparent glass with stripes on the bottom on white background",
         "--train_batch_size", "1",
         "--gradient_accumulation_steps", "4",
         "--gradient_checkpointing",
