@@ -2,10 +2,8 @@ from huggingface_hub import login
 from datasets import load_dataset
 import os
 import subprocess
-os.environ["HF_TOKEN"] = "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"
-token = os.environ["HF_TOKEN"]
 
-login(token)
+login(token = "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")
 def main():
     # Percorsi dataset e output
     output_dir = "model"
