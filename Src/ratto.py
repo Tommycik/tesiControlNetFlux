@@ -2,7 +2,7 @@ from huggingface_hub import login
 from datasets import load_dataset
 import os
 import subprocess
-os.environ["HF_TOKEN"] = "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"
+os.environ["HF_TOKEN"] = "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"
 token = os.environ["HF_TOKEN"]
 
 login(token="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")
