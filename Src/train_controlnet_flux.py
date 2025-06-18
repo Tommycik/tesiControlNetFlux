@@ -87,7 +87,7 @@ def log_validation(
         )
     else:
         flux_controlnet = FluxControlNetModel.from_pretrained(
-            args.output_dir, torch_dtype=torch.bfloat16, variant=args.save_weight_dtype
+            args.output_dir,filename="diffusion_pytorch_model.safetensors", torch_dtype=torch.bfloat16, variant=args.save_weight_dtype
         )
         pipeline = FluxControlNetPipeline.from_pretrained(
             args.pretrained_model_name_or_path,
