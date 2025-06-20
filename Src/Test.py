@@ -4,7 +4,7 @@ from huggingface_hub import login
 import torch
 from diffusers.utils import load_image
 from diffusers.pipelines.flux.pipeline_flux_controlnet import FluxControlNetPipeline
-from diffusers.models.controlnet_flux import FluxControlNetModel
+from diffusers.models.controlnets.flux import FluxControlNetModel
 
 #token hugginface
 user_input = input("Enter token: ")
