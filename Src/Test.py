@@ -1,10 +1,6 @@
 import torch
 import os
 from huggingface_hub import login
-os.environ["HF_TOKEN"] = "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"
-os.environ['HF_HOME'] = 'modle'
-token = os.environ["HF_TOKEN"]
-
 import torch
 from diffusers.utils import load_image
 from diffusers.pipelines.flux.pipeline_flux_controlnet import FluxControlNetPipeline
