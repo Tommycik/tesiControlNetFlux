@@ -12,7 +12,7 @@ from diffusers.models.controlnet_flux import FluxControlNetModel
 
 login(token='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', add_to_git_credential=True)
 base_model = 'black-forest-labs/FLUX.1-dev'
-controlnet_model = 'InstantX/FLUX.1-dev-Controlnet-Canny'
+controlnet_model = 'tommycik/controlFlux'
 controlnet = FluxControlNetModel.from_pretrained(controlnet_model, torch_dtype=torch.bfloat16)
 pipe = FluxControlNetPipeline.from_pretrained(base_model, controlnet=controlnet, torch_dtype=torch.bfloat16)
 pipe.to("cuda")
