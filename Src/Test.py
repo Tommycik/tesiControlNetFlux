@@ -10,7 +10,9 @@ from diffusers.utils import load_image
 from diffusers.pipelines.flux.pipeline_flux_controlnet import FluxControlNetPipeline
 from diffusers.models.controlnet_flux import FluxControlNetModel
 
-login(token='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', add_to_git_credential=True)
+#token hugginface
+user_input = input("Enter token: ")
+login(token = user_input)
 base_model = 'black-forest-labs/FLUX.1-dev'
 controlnet_model = 'tommycik/controlFlux'
 controlnet = FluxControlNetModel.from_pretrained(controlnet_model, torch_dtype=torch.bfloat16)
