@@ -27,3 +27,4 @@ image = pipe(
     guidance_scale=3.5,
 ).images[0]
 image.save("image.jpg")
+image.show()
