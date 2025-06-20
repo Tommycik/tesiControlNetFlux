@@ -90,7 +90,7 @@ def log_validation(
             args.output_dir,
             torch_dtype=torch.bfloat16,
             variant=None,  # Disable variant since you're not using fp32.* files
-            filename="diffusion_pytorch_model.safetensors"
+            filename="diffusion_pytorch_model.safetensors",
         )
         pipeline = FluxControlNetPipeline.from_pretrained(
             args.pretrained_model_name_or_path,
