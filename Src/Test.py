@@ -20,7 +20,9 @@ pipe = FluxControlNetPipeline.from_pretrained(base_model, controlnet=controlnet,
 pipe.to("cuda")
 
 control_image = load_image("https://huggingface.co/InstantX/FLUX.1-dev-Controlnet-Canny/resolve/main/canny.jpg")
-prompt = "A girl in city, 25 years old, cool, futuristic"
+user_input = input("Enter prompt: ")
+#prompt = "A tall glass with gemstones"
+prompt = user_input
 image = pipe(
     prompt,
     control_image=control_image,
