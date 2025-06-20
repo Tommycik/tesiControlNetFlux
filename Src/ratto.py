@@ -31,21 +31,21 @@ def main():
         "--caption_column", "prompt",
         "--jsonl_for_train", "./controlnet_dataset/dataset.jsonl",
         "--resolution", "512",
-        "--learning_rate", "1e-5",
-        "--max_train_steps", "2",
-        "--checkpointing_steps", "1",
-        "--validation_steps", "1",
+        "--learning_rate", "3e-6",
+        "--max_train_steps", "2000",
+        "--checkpointing_steps", "500",
+        "--validation_steps", "250",
         "--mixed_precision", "bf16",
         "--validation_image", "controlnet_dataset/sample_0000.jpg",
-        "--validation_prompt", "transparent glass with stripes on the bottom on white background",
-        "--train_batch_size", "1",
+        "--validation_prompt", "transparent glass on white background, the bottom part of the glass presents light grooves",
+        "--train_batch_size", "2",
         "--gradient_accumulation_steps", "4",
         "--gradient_checkpointing",
-        "--use_8bit_adam",
-        "--set_grads_to_none",
         "--push_to_hub",
         "--hub_model_id", "tommycik/controlFlux"
     ]
+    #"--use_8bit_adam",
+    # "--set_grads_to_none",
 
     print("Esecuzione comando Accelerate:")
     print(" ".join(command))
