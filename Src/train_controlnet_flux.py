@@ -87,7 +87,10 @@ def log_validation(
         )
     else:
         flux_controlnet = FluxControlNetModel.from_pretrained(
-            args.output_dir, torch_dtype=torch.bfloat16, filename="diffusion_pytorch_model.safetensors"
+            args.output_dir,
+            torch_dtype=torch.bfloat16,
+            variant=None,  # Disable variant since you're not using fp32.* files
+            filename="diffusion_pytorch_model.safetensors"
         )
         pipeline = FluxControlNetPipeline.from_pretrained(
             args.pretrained_model_name_or_path,
@@ -895,13 +898,13 @@ def main(args):
         args.pretrained_model_name_or_path,
         subfolder="vae",
         revision=args.revision,
-        variant=args.variant,
+        variant=None,
     )
     flux_transformer = FluxTransformer2DModel.from_pretrained(
         args.pretrained_model_name_or_path,
         subfolder="transformer",
         revision=args.revision,
-        variant=args.variant,
+        variant=None,
     )
     if args.controlnet_model_name_or_path:
         logger.info("Loading existing controlnet weights")
