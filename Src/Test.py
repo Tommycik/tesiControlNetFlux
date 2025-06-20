@@ -4,7 +4,10 @@ from huggingface_hub import login
 import torch
 from diffusers.utils import load_image
 from diffusers.pipelines.flux.pipeline_flux_controlnet import FluxControlNetPipeline
-from diffusers.models.controlnets.flux import FluxControlNetModel
+#from diffusers.models.controlnets.flux import FluxControlNetModel da usare ma da problemi
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+from diffusers.models.controlnet_flux import FluxControlNetModel #deprecata
 
 #token hugginface
 user_input = input("Enter token: ")
