@@ -24,7 +24,7 @@ image = pipe(
     control_image=control_image,
     controlnet_conditioning_scale=1.0,
     num_inference_steps=1,
-    guidance_scale=3.5,
+    guidance_scale=2.5,
 ).images[0]
 image.save("image.jpg")
 image.show()
