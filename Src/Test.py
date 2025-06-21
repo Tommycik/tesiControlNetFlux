@@ -22,9 +22,9 @@ prompt = user_input
 image = pipe(
     prompt,
     control_image=control_image,
-    controlnet_conditioning_scale=0.8,
-    num_inference_steps=15,
-    guidance_scale=3.0,
+    controlnet_conditioning_scale=0.6,
+    num_inference_steps=10,
+    guidance_scale=3.5,
 ).images[0]
 image.save("image.jpg")
 image.show()
