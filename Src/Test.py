@@ -22,8 +22,8 @@ prompt = user_input
 image = pipe(
     prompt,
     control_image=control_image,
-    controlnet_conditioning_scale=0.6,
-    num_inference_steps=5,
+    controlnet_conditioning_scale=1.0,
+    num_inference_steps=1,
     guidance_scale=3.5,
 ).images[0]
 image.save("image.jpg")
