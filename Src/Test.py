@@ -23,7 +23,7 @@ image = pipe(
     prompt,
     control_image=control_image,
     controlnet_conditioning_scale=0.2,
-    num_inference_steps=25,
+    num_inference_steps=35,
     guidance_scale=4.0,
 ).images[0]
 image.save("image.jpg")
