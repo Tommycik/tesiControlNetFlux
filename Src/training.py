@@ -8,7 +8,7 @@ import shutil
 
 #login(token = "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")
 def main():
-    #token hugginface
+    #token hugginface da tastiera
     user_input = input("Enter token: ")
     login(token = user_input)
     # Percorsi dataset e output
