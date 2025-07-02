@@ -1087,7 +1087,7 @@
     {
         "image": "sample_0216.jpg",
         "condition_image": "sample_0216_canny.jpg",
-        "prompt": "A single wine glass,containing a light brown transparent liquid .The glass is filled about halfway. The shape of the glass is oval with a narrow stem and a circular base. "
+        "prompt": "A single low glass,  containing an amber colored transparent liquid .The glass is filled about halfway. The glass has a narrower base and a larger bowl  .the base is hexagonal.  "
     },
 
 
