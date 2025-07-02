@@ -41,6 +41,8 @@ def main():
         "--train_batch_size", "1",
         "--gradient_accumulation_steps", "4",
         "--gradient_checkpointing",
+        "--use_8bit_adam",
+        "--set_grads_to_none",
         "--push_to_hub",
         "--hub_model_id", "tommycik/controlFluxAlcol"
     ]
