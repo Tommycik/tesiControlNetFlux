@@ -1059,4 +1059,108 @@
         "condition_image": "sample_0211_canny.jpg",
         "prompt": ""
     }
+
+   {
+        "image": "sample_0212.jpg",
+        "condition_image": "sample_0212_canny.jpg",
+        "prompt": "A transparent wine glass filled halfway with red wine, placed on a white background."
+    }
+
+    {
+        "image": "sample_0212.jpg",
+        "condition_image": "sample_0212_canny.jpg",
+        "prompt": "A clear stemmed wine glass containing red wine up to the midpoint of the bowl. The glass sits upright on a flat, white surface with soft reflections and no surrounding objects."
+    }
+
+    {
+        "image": "sample_0212.jpg",
+        "condition_image": "sample_0212_canny.jpg",
+        "prompt": "A single elegant wine glass, partially filled with dark red liquid. The glass is clean, symmetrical, and well-lit, with visible highlights and reflections on a plain white background."
+    }
+
+    {
+        "image": "sample_0213.jpg",
+        "condition_image": "sample_0213_canny.jpg",
+        "prompt": "A large, round wine glass with a wide bowl and long, slender stem, filled just below the halfway point with red wine. The glass is made of clear, reflective glass and sits on a smooth, light-gray surface."
+    }
+
+    {
+        "image": "sample_0213.jpg",
+        "condition_image": "sample_0213_canny.jpg",
+        "prompt": "A transparent wine glass featuring a spherical bowl and a narrow stem, holding dark red wine up to the widest part of the bowl."
+    }
+
+    {
+        "image": "sample_0213.jpg",
+        "condition_image": "sample_0213_canny.jpg",
+        "prompt": "A crystal-clear wine glass positioned upright, filled with red wine that reaches the midpoint of its rounded bowl. The stem is straight and thin, and the base rests flat on a clean, light-colored surface."
+    }
+
+    {
+        "image": "sample_0214.jpg",
+        "condition_image": "sample_0214_canny.jpg",
+        "prompt": "A clear wine glass with a tall, narrow stem and a slightly tapered bowl, filled about halfway with pale yellow-white wine. The glass stands on a flat, white surface with soft lighting and minimal shadows. The background is clean and completely white, enhancing the visibility of the glass shape and the light color of the wine."
+    }
+
+    {
+        "image": "sample_0214.jpg",
+        "condition_image": "sample_0214_canny.jpg",
+        "prompt": "A transparent wine glass with a long, slim stem and a vertically elongated bowl. The glass is filled to just under the midpoint with white wine, showing a light golden hue."
+    }
+
+    {
+        "image": "sample_0214.jpg",
+        "condition_image": "sample_0214_canny.jpg",
+        "prompt": "A single wine glass, upright and centered, containing light yellow wine. The shape of the glass is slightly oval with a narrow stem and a circular base. "
+    }
+
+    {
+        "image": "sample_0215.jpg",
+        "condition_image": "sample_0215_canny.jpg",
+        "prompt": "A single wine glass, upright and centered, containing light yellow wine. The shape of the glass is slightly oval with a narrow stem and a circular base. "
+    }
+
+    {
+        "image": "sample_0215.jpg",
+        "condition_image": "sample_0215_canny.jpg",
+        "prompt": "A single wine glass, upright and centered, containing light yellow wine. The shape of the glass is slightly oval with a narrow stem and a circular base. "
+    }
+
+    {
+        "image": "sample_0215.jpg",
+        "condition_image": "sample_0215_canny.jpg",
+        "prompt": "A single wine glass, upright and centered, containing light yellow wine. The shape of the glass is oval with a narrow stem and a circular base. "
+    }
+
+    {
+        "image": "sample_0216.jpg",
+        "condition_image": "sample_0216_canny.jpg",
+        "prompt": "A single wine glass, upright and centered, containing light yellow wine. The shape of the glass is slightly oval with a narrow stem and a circular base. "
+    }
+
+    {
+        "image": "sample_0216.jpg",
+        "condition_image": "sample_0216_canny.jpg",
+        "prompt": "A single wine glass, upright and centered, containing light yellow wine. The shape of the glass is slightly oval with a narrow stem and a circular base. "
+    }
+
+    {
+        "image": "sample_0216.jpg",
+        "condition_image": "sample_0216_canny.jpg",
+        "prompt": "A single wine glass, upright and centered, containing light yellow wine. The shape of the glass is oval with a narrow stem and a circular base. "
+    }
+
+    {
+        "image": "sample_0217.jpg",
+        "condition_image": "sample_0217_canny.jpg",
+        "prompt": "A single wine glass, upright and centered, containing light yellow wine. The shape of the glass is oval with a narrow stem and a circular base and a tapered bowl. "
+    }
+
+    {
+        "image": "sample_0217.jpg",
+        "condition_image": "sample_0217_canny.jpg",
+        "prompt": "A single wine glass, upright and centered, containing light yellow wine. The shape of the glass is oval with a narrow stem and a circular base. "
+    }
+
+    
 ]
