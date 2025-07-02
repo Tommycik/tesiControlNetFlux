@@ -42,7 +42,7 @@ def main():
         "--gradient_accumulation_steps", "4",
         "--gradient_checkpointing",
         "--push_to_hub",
-        "--hub_model_id", "tommycik/controlFlux"
+        "--hub_model_id", "tommycik/controlFluxAlcol"
     ]
     #"--use_8bit_adam",
     # "--set_grads_to_none",
@@ -52,17 +52,6 @@ def main():
 
     result = subprocess.run(command)
     
-    # Load safetensors file
-    safetensor_path = "model/diffusion_pytorch_model.safetensors"
-    state_dict = load_file(safetensor_path)
-    
-    # Save as PyTorch .bin format
-    torch.save(state_dict, "model/diffusion_pytorch_model.fp32.bin")
-    
-    # Also rename the safetensor file with the expected name
-    shutil.copy(safetensor_path, "model/diffusion_pytorch_model.fp32.safetensors")
-    
-    print("✅ Conversion complete: both .fp32.safetensors and .fp32.bin generated.")
 
 if __name__ == "__main__":
     main()
