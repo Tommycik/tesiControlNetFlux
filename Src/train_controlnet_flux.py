@@ -87,7 +87,10 @@ def log_validation(
         )
     else:
         flux_controlnet = FluxControlNetModel.from_pretrained(
-            args.output_dir, torch_dtype=torch.bfloat16, variant=args.save_weight_dtype
+            args.output_dir,
+            torch_dtype=torch.bfloat16,
+            variant=None,  # Disable variant since you're not using fp32.* files
+            filename="diffusion_pytorch_model.safetensors",
         )
         pipeline = FluxControlNetPipeline.from_pretrained(
             args.pretrained_model_name_or_path,
@@ -460,7 +463,7 @@ def parse_args(input_args=None):
     parser.add_argument(
         "--mixed_precision",
         type=str,
-        default=None,
+        default="bf16",
         choices=["no", "fp16", "bf16"],
         help=(
             "Whether to use mixed precision. Choose between fp16 and bf16 (bfloat16). Bf16 requires PyTorch >="
@@ -895,13 +898,13 @@ def main(args):
         args.pretrained_model_name_or_path,
         subfolder="vae",
         revision=args.revision,
-        variant=args.variant,
+        variant=None,
     )
     flux_transformer = FluxTransformer2DModel.from_pretrained(
         args.pretrained_model_name_or_path,
         subfolder="transformer",
         revision=args.revision,
-        variant=args.variant,
+        variant=None,
     )
     if args.controlnet_model_name_or_path:
         logger.info("Loading existing controlnet weights")

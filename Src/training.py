@@ -2,15 +2,19 @@ from huggingface_hub import login
 from datasets import load_dataset
 import os
 import subprocess
-os.environ["HF_TOKEN"] = "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"
-os.environ['HF_HOME'] = 'modle'
-token = os.environ["HF_TOKEN"]
+from safetensors.torch import load_file
+import torch
+import shutil
 
-login(token="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")
+#login(token = "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")
 def main():
+    #token hugginface da tastiera
+    user_input = input("Enter token: ")
+    login(token = user_input)
     # Percorsi dataset e output
-    output_dir = "modle"
-    #dataset = load_dataset("json", data_files="controlnet_dataset/dataset.json")
+    output_dir = "model"
+    #dataset = load_dataset("./controlnet_dataset/dataset.py", data_dir="./controlnet_dataset")
+    #print(dataset["train"].column_names)
     # Nome base modello
     pretrained_model = "black-forest-labs/FLUX.1-dev"
     controlnet_pretrained = 'InstantX/FLUX.1-dev-Controlnet-Canny'
@@ -22,31 +26,34 @@ def main():
         "--pretrained_model_name_or_path", pretrained_model,
         "--controlnet_model_name_or_path", controlnet_pretrained,
         "--output_dir", output_dir,
-        "--dataset_name", "./controlnet_dataset",
-        "--conditioning_image_column", "conditioning_image",
+        "--conditioning_image_column", "condition_image",
         "--image_column", "image",
         "--caption_column", "prompt",
+        "--jsonl_for_train", "./controlnet_dataset/dataset.jsonl",
         "--resolution", "512",
-        "--learning_rate", "1e-5",
-        "--max_train_steps", "10000",
-        "--checkpointing_steps", "200",
-        "--validation_steps", "100",
-        "--mixed_precision", "fp16",
+        "--learning_rate", "2e-6",
+        "--max_train_steps", "1000",
+        "--checkpointing_steps", "250",
+        "--validation_steps", "125",
+        "--mixed_precision", "bf16",
         "--validation_image", "controlnet_dataset/sample_0000.jpg",
-        "--validation_prompt", "red circle with blue background cyan circle with brown floral background",
+        "--validation_prompt", "transparent glass on white background, the bottom part of the glass presents light grooves",
         "--train_batch_size", "1",
         "--gradient_accumulation_steps", "4",
         "--gradient_checkpointing",
         "--use_8bit_adam",
         "--set_grads_to_none",
-        "--report_to", "wandb",
         "--push_to_hub",
+        "--hub_model_id", "tommycik/controlFluxAlcol"
     ]
+    #"--use_8bit_adam",
+    # "--set_grads_to_none",
 
     print("Esecuzione comando Accelerate:")
     print(" ".join(command))
 
-    subprocess.run(command)
+    result = subprocess.run(command)
+    
 
 if __name__ == "__main__":
     main()

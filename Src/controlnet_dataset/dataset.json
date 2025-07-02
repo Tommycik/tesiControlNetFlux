@@ -1058,5 +1058,44 @@
         "image": "sample_0211.jpg",
         "condition_image": "sample_0211_canny.jpg",
         "prompt": ""
-    }
+    },
+
+    {
+        "image": "sample_0212.jpg",
+        "condition_image": "sample_0212_canny.jpg",
+        "prompt": "A single elegant wine glass, partially filled with dark red liquid. The glass is clean, symmetrical, and well-lit, with visible highlights and reflections on a plain white background."
+    },
+
+    {
+        "image": "sample_0213.jpg",
+        "condition_image": "sample_0213_canny.jpg",
+        "prompt": "A crystal-clear wine glass positioned upright, filled with red wine that reaches the midpoint of its rounded bowl. The stem is straight and thin, and the base rests flat on a clean, light-colored surface."
+    },
+
+    {
+        "image": "sample_0214.jpg",
+        "condition_image": "sample_0214_canny.jpg",
+        "prompt": "A single wine glass, upright and centered, containing light yellow wine. The shape of the glass is slightly oval with a narrow stem and a circular base. "
+    },
+
+    {
+        "image": "sample_0215.jpg",
+        "condition_image": "sample_0215_canny.jpg",
+        "prompt": "A single low circular glass, containig whiskey filled halfway. The shape of the glass is circular . "
+    },
+
+    {
+        "image": "sample_0216.jpg",
+        "condition_image": "sample_0216_canny.jpg",
+        "prompt": "A single low glass,  containing an amber colored transparent liquid .The glass is filled about halfway. The glass has a narrower base and a larger bowl  .the base is hexagonal.  "
+    },
+
+
+    {
+        "image": "sample_0217.jpg",
+        "condition_image": "sample_0217_canny.jpg",
+        "prompt": "A single wine glass, upright and centered, containing light yellow wine. The shape of the glass is oval with a narrow stem and a circular base. "
+    },
+
+    
 ]
