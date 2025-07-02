@@ -10,7 +10,7 @@ output_folder = "imagesCanny"
 os.makedirs(output_folder, exist_ok=True)
 
 # Estensioni supportate
-supported_exts = [".jpg", ".jpeg", ".png", ".bmp"]
+supported_exts = [".jpg"]
 
 # Scorri tutte le immagini nella cartella
 for filename in os.listdir(input_folder):
@@ -26,7 +26,7 @@ for filename in os.listdir(input_folder):
         edges = cv2.Canny(gray, threshold1=100, threshold2=200)
 
         # Costruisce il nuovo nome file
-        output_filename = f"{name}__canny.png"
+        output_filename = f"{name}__canny.jpg"
         output_path = os.path.join(output_folder, output_filename)
 
         # Salva il risultato
