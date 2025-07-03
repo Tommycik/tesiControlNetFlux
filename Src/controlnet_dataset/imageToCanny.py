@@ -26,7 +26,7 @@ for filename in os.listdir(input_folder):
         edges = cv2.Canny(gray, threshold1=100, threshold2=200)
 
         # Costruisce il nuovo nome file
-        output_filename = f"{name}__canny.jpg"
+        output_filename = f"{name}_canny.jpg"
         output_path = os.path.join(output_folder, output_filename)
 
         # Salva il risultato
