@@ -10,7 +10,7 @@ from diffusers.models.controlnets.controlnet_flux import FluxControlNetModel
 user_input = input("Enter token: ")
 login(token = user_input)
 base_model = 'black-forest-labs/FLUX.1-dev'
-controlnet_model = 'tommycik/controlFlux'
+controlnet_model = 'tommycik/controlFluxAlcol'
 controlnet = FluxControlNetModel.from_pretrained(controlnet_model, torch_dtype=torch.bfloat16)
 pipe = FluxControlNetPipeline.from_pretrained(base_model, controlnet=controlnet, torch_dtype=torch.bfloat16)
 pipe.to("cuda")
