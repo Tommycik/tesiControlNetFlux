@@ -30,8 +30,8 @@ for idx, (img_path, canny_path, prompt) in tqdm(enumerate(zip(image_files, canny
     base_name = f"sample_{idx:04d}"
 
     # Copia o referenzia i file nel dataset
-    new_img_path = output_dir / f"{base_name}.jpg"
-    new_canny_path = output_dir / f"{base_name}_canny.jpg"
+    new_img_path = output_dir / f"images/{base_name}.jpg"
+    new_canny_path = output_dir / f"imagesControlCanny{base_name}_canny.jpg"
 
     # Copia i file (puoi anche fare symlink se preferisci)
     os.system(f'copy  "{img_path}" "{new_img_path}"')
