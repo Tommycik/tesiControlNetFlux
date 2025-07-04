@@ -10,3 +10,4 @@ SentencePiece
 opencv-python
 torch
 diffusers
+peft

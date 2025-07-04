@@ -60,9 +60,40 @@ from diffusers.utils.hub_utils import load_or_create_model_card, populate_model_
 from diffusers.utils.import_utils import is_torch_npu_available, is_xformers_available
 from diffusers.utils.torch_utils import is_compiled_module
 
+from peft import LoraConfig
+
 
 if is_wandb_available():
     import wandb
+
+import torch.nn as nn
+
+#lora utility
+class LoRAAttnProcessor(nn.Module):
+    def __init__(self, hidden_size, rank=4, alpha=32):
+        super().__init__()
+        self.rank = rank
+        self.lora_A = nn.Linear(hidden_size, rank, bias=False)
+        self.lora_B = nn.Linear(rank, hidden_size, bias=False)
+        self.scaling = alpha / rank
+
+    def forward(self, x):
+        return self.lora_B(self.lora_A(x)) * self.scaling
+
+
+def apply_lora_to_attn(module, rank=4, alpha=32):
+    for name, child in module.named_children():
+        if isinstance(child, nn.MultiheadAttention) or "attn" in name:
+            setattr(module, name, nn.Sequential(
+                child,
+                LoRAAttnProcessor(child.embed_dim, rank=rank, alpha=alpha)
+            ))
+        else:
+            apply_lora_to_attn(child, rank, alpha)
+
+def save_lora_weights(model, path):
+    lora_weights = {k: v for k, v in model.state_dict().items() if 'lora' in k.lower()}
+    torch.save(lora_weights, os.path.join(path, "lora_weights.pt"))
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
 check_min_version("0.34.0.dev0")
@@ -98,6 +129,14 @@ def log_validation(
             transformer=flux_transformer,
             torch_dtype=torch.bfloat16,
         )
+
+    #Lora
+    if args.use_lora:
+        print("🔧 Applying LoRA adapters...")
+        # Inject LoRA into both modules
+        apply_lora_to_attn(flux_controlnet, args.lora_rank, args.lora_alpha)
+        apply_lora_to_attn(flux_transformer, args.lora_rank, args.lora_alpha)
+        print("✅ LoRA layers added!")
 
     pipeline.to(accelerator.device)
     pipeline.set_progress_bar_config(disable=True)
@@ -964,16 +1003,28 @@ def main(args):
         # create custom saving & loading hooks so that `accelerator.save_state(...)` serializes in a nice format
         def save_model_hook(models, weights, output_dir):
             if accelerator.is_main_process:
-                i = len(weights) - 1
+                # Save LoRA weights or full model depending on args.use_lora
+                if args.use_lora:
+                    os.makedirs(output_dir, exist_ok=True)
+                    save_lora_weights(flux_controlnet, output_dir)
+                    save_lora_weights(flux_transformer, output_dir)
+                    print("Saved only LoRA weights.")
+                else:
+                    # Save each model in models list to a subdirectory
+                    for i, model in enumerate(models):
+                        sub_dir = os.path.join(output_dir, f"flux_controlnet_{i}")
+                        os.makedirs(sub_dir, exist_ok=True)
+                        model.save_pretrained(sub_dir)
+                #i = len(weights) - 1
 
-                while len(weights) > 0:
-                    weights.pop()
-                    model = models[i]
+                #while len(weights) > 0:
+                  #  weights.pop()
+                  #  model = models[i]
 
-                    sub_dir = "flux_controlnet"
-                    model.save_pretrained(os.path.join(output_dir, sub_dir))
+                  #  sub_dir = "flux_controlnet"
+                    #model.save_pretrained(os.path.join(output_dir, sub_dir))
 
-                    i -= 1
+                    #i -= 1
 
         def load_model_hook(models, input_dir):
             while len(models) > 0:
