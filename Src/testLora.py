@@ -25,7 +25,7 @@ pipe = FluxControlNetPipeline.from_pretrained(base_flux_model, controlnet=contro
 pipe.to("cuda")
 
 # Load control image
-control_image = load_image("controlnet_dataset/sample_0000_canny.jpg")
+control_image = load_image("controlnet_dataset/imagesControlCanny/sample_0000_canny.jpg")
 
 # Prompt input
 user_prompt = input("Enter prompt: ")

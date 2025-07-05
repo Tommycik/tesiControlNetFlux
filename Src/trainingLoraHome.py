@@ -36,7 +36,7 @@ def main():
         "--mixed_precision", "fp16",  # Smaller than bf16
 
         # ✅ Only one validation image/prompt to reduce inference VRAM
-        "--validation_image", "controlnet_dataset/sample_0000.jpg",
+        "--validation_image", "controlnet_dataset/images/sample_0000.jpg",
         "--validation_prompt",
         "transparent glass on white background, the bottom part of the glass presents light grooves",
 
