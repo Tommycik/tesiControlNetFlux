@@ -25,7 +25,7 @@ def main():
         "--image_column", "image",
         "--caption_column", "prompt",
         "--jsonl_for_train", "./controlnet_dataset/dataset.jsonl",
-        "--resolution", "256",  # ⬅️ reduced from 512
+        "--resolution", "128",  # ⬅️ reduced from 512
         "--learning_rate", "1e-4",
         "--max_train_steps", "1000",
         "--checkpointing_steps", "250",
