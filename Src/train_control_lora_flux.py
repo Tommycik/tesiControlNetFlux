@@ -83,16 +83,18 @@ class LoRAAttnProcessor(nn.Module):
 
 def apply_lora_to_attn(module, rank=4, alpha=32):
     for name, child in module.named_children():
-        if "attn" in name.lower() or isinstance(child, nn.Module):
+        # Only inject into actual attention projection layers (e.g., q, k, v, out proj)
+        if isinstance(child, nn.Linear) and "attn" in name.lower():
             try:
-                hidden_size = getattr(child, "hidden_size", None) or getattr(child, "embed_dim", None) or \
-                              child.to(torch.float32)(torch.randn(1, 1, 128)).shape[-1]
-                if hidden_size:
-                    lora_layer = LoRAAttnProcessor(hidden_size, rank=rank, alpha=alpha)
-                    setattr(module, name, nn.Sequential(child, lora_layer))
+                hidden_size = child.in_features
+                lora_layer = LoRAAttnProcessor(hidden_size, rank=rank, alpha=alpha)
+                print(f"✅ Injecting LoRA into: {name} ({type(child)})")
+                # Replace the linear layer with a sequential block including LoRA
+                setattr(module, name, nn.Sequential(child, lora_layer))
             except Exception as e:
-                print(f"⚠️ Skipping {name} due to error: {e}")
+                print(f"⚠️ Skipping {name} due to injection error: {e}")
         else:
+            # Recursively apply to child modules
             apply_lora_to_attn(child, rank, alpha)
 
 def save_lora_weights(model, path):
