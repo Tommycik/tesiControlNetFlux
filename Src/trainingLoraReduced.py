@@ -1,6 +1,8 @@
 from huggingface_hub import login
 import subprocess
 import os
+import torch
+torch.cuda.empty_cache()
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 def main():
     # Ask for Hugging Face token interactively
@@ -33,7 +35,7 @@ def main():
         "--validation_prompt",
         "transparent glass on white background, the bottom part of the glass presents light grooves",
         "--train_batch_size", "1",  # ⬅️ lower batch
-        "--gradient_accumulation_steps", "8",  # ⬅️ to maintain effective batch
+        "--gradient_accumulation_steps", "4",  # ⬅️ to maintain effective batch
         "--gradient_checkpointing",
         "--use_8bit_adam",
         "--enable_model_cpu_offload",
