@@ -1,6 +1,7 @@
 from huggingface_hub import login
 import subprocess
-
+import os
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 def main():
     # Ask for Hugging Face token interactively
     user_input = input("Enter token: ")
@@ -35,12 +36,13 @@ def main():
         "--gradient_accumulation_steps", "8",  # ⬅️ to maintain effective batch
         "--gradient_checkpointing",
         "--use_8bit_adam",
+        "--enable_model_cpu_offload",
         "--set_grads_to_none",
 
         # LoRA-specific
         "--use_lora",
-        "--lora_rank", "4",
-        "--lora_alpha", "32",
+        "--lora_rank", "2",
+        "--lora_alpha", "16",
         "--lora_dropout", "0.05",
 
         "--push_to_hub",
