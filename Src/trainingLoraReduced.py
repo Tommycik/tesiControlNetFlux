@@ -30,7 +30,7 @@ def main():
         "--max_train_steps", "1000",
         "--checkpointing_steps", "250",
         "--validation_steps", "500",  # ⬅️ less frequent validation
-        "--mixed_precision", "fp16",  # ⬅️ use fp16
+        "--mixed_precision", "fp8",  # ⬅️ use fp8
         "--validation_image", "controlnet_dataset/images/sample_0000.jpg",
         "--validation_prompt",
         "transparent glass on white background, the bottom part of the glass presents light grooves",
@@ -38,7 +38,7 @@ def main():
         "--gradient_accumulation_steps", "1",  # ⬅️ to maintain effective batch
         "--gradient_checkpointing",
         "--use_8bit_adam",
-        #"--enable_model_cpu_offload",
+        "--enable_model_cpu_offload",
         "--set_grads_to_none",
 
         # LoRA-specific
