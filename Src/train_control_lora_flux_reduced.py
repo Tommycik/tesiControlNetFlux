@@ -926,11 +926,19 @@ def main(args):
                 repo_id=args.hub_model_id or Path(args.output_dir).name, exist_ok=True, token=args.hub_token
             ).repo_id
 
+    # Determine weight_dtype from args.mixed_precision
+    if args.mixed_precision == "fp16":
+        weight_dtype = torch.float16
+    elif args.mixed_precision == "bf16":
+        weight_dtype = torch.bfloat16
+    else:
+        weight_dtype = torch.float32
+
     # Setup 4-bit quantization configuration for base models
     quantization_config = BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_quant_type="nf4",  # Use NF4 quantization
-        bnb_4bit_compute_dtype=torch.float16,  # Match your fp16 mixed_precision
+        bnb_4bit_compute_dtype=weight_dtype,  # Match your fp16 mixed_precision
         bnb_4bit_use_double_quant=True,  # Enable double quantization for potentially more memory savings
     )
     # Load the tokenizers
@@ -966,15 +974,15 @@ def main(args):
         subfolder="transformer",
         revision=args.revision,
         variant=args.variant,
-        torch_dtype=torch.float32, # load full precision before N4 is used
-        quantization_config=quantization_config,  # ADD this line
+        quantization_config=quantization_config,
+        torch_dtype=weight_dtype, # load full precision before N4 is used
     )
     if args.controlnet_model_name_or_path:
         logger.info("Loading existing ControlNet weights")
         flux_controlnet = FluxControlNetModel.from_pretrained(
             args.controlnet_model_name_or_path,
-            torch_dtype=torch.float32,  # load full precision before N4 is used
-            quantization_config=quantization_config,  # ADD this line
+            quantization_config=quantization_config,
+            torch_dtype=weight_dtype,  # load full precision before N4 is used
         )
     else:
         logger.info("Initializing ControlNet weights from UNet")
@@ -982,8 +990,8 @@ def main(args):
             flux_transformer,
             num_double_layers=args.num_double_layers,
             num_single_layers=args.num_single_layers,
-            torch_dtype=torch.float32,  # load full precision before N4 is used
-            quantization_config=quantization_config,  # ADD this line
+            quantization_config=quantization_config,
+            torch_dtype=weight_dtype,  # load full precision before N4 is used
         )
     logger.info("all models loaded successfully")
 
@@ -1153,7 +1161,7 @@ def main(args):
         weight_dtype = torch.bfloat16
 
     vae.to(accelerator.device, dtype=weight_dtype)
-    flux_transformer.to(accelerator.device, dtype=weight_dtype)#check
+    #flux_transformer.to(accelerator.device, dtype=weight_dtype)#check
 
     def compute_embeddings(batch, proportion_empty_prompts, flux_controlnet_pipeline, weight_dtype, is_train=True):
         prompt_batch = batch[args.caption_column]
