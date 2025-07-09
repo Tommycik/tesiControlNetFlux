@@ -973,7 +973,7 @@ def main(args):
         logger.info("Loading existing ControlNet weights")
         flux_controlnet = FluxControlNetModel.from_pretrained(
             args.controlnet_model_name_or_path,
-            torch_dtype=torch.float16,  # load full precision before N4 is used
+            #torch_dtype=torch.float32,  # load full precision before N4 is used
             quantization_config=quantization_config,  # ADD this line
         )
     else:
@@ -982,7 +982,7 @@ def main(args):
             flux_transformer,
             num_double_layers=args.num_double_layers,
             num_single_layers=args.num_single_layers,
-            torch_dtype=torch.float16,  # load full precision before N4 is used
+            #torch_dtype=torch.float32,  # load full precision before N4 is used
             quantization_config=quantization_config,  # ADD this line
         )
     logger.info("all models loaded successfully")
