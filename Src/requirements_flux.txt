@@ -1,6 +1,6 @@
 numpy==1.19.5
 scipy
-opencv-python==4.7.0.72
+opencv-python
 accelerate
 torchvision
 transformers
