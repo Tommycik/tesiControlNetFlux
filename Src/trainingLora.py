@@ -30,8 +30,8 @@ def main():
         "--mixed_precision", "bf16",
         "--validation_image", "controlnet_dataset/images/sample_0000.jpg",
         "--validation_prompt", "transparent glass on white background, the bottom part of the glass presents light grooves",
-        "--train_batch_size", "8",#for speed
-        "--gradient_accumulation_steps", "1",
+        "--train_batch_size", "4",#for speed,if 8 and 1 gradient needs more than 80 gb of ram(79 + 144 mb)
+        "--gradient_accumulation_steps", "2",
         #"--gradient_checkpointing",
         "--use_8bit_adam",
         "--set_grads_to_none",
