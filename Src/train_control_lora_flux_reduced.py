@@ -1153,7 +1153,7 @@ def main(args):
         weight_dtype = torch.bfloat16
 
     vae.to(accelerator.device, dtype=weight_dtype)
-    #flux_transformer.to(accelerator.device, dtype=weight_dtype) #creates error by casting the precison to new type
+    flux_transformer.to(accelerator.device, dtype=weight_dtype)#check
 
     def compute_embeddings(batch, proportion_empty_prompts, flux_controlnet_pipeline, weight_dtype, is_train=True):
         prompt_batch = batch[args.caption_column]
