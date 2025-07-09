@@ -32,7 +32,7 @@ def main():
         "--validation_prompt", "transparent glass on white background, the bottom part of the glass presents light grooves",
         "--train_batch_size", "4",#for speed,if 8 and 1 gradient needs more than 80 gb of ram(79 + 144 mb)
         "--gradient_accumulation_steps", "2",
-        #"--gradient_checkpointing",
+        "--gradient_checkpointing",#if not it goes out of memory if train batch >2
         "--enable_model_cpu_offload",
         "--use_8bit_adam",
         "--set_grads_to_none",
