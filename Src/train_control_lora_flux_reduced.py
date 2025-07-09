@@ -982,7 +982,7 @@ def main(args):
             flux_transformer,
             num_double_layers=args.num_double_layers,
             num_single_layers=args.num_single_layers,
-            # torch_dtype=torch.float16, # REMOVE or comment out this line if N4 is used
+            torch_dtype=torch.float32,  # load full precision before N4 is used
             quantization_config=quantization_config,  # ADD this line
         )
     logger.info("all models loaded successfully")
