@@ -966,7 +966,7 @@ def main(args):
         subfolder="transformer",
         revision=args.revision,
         variant=args.variant,
-        torch_dtype=torch.float16, # load full precision before N4 is used
+        #torch_dtype=torch.float32 # load full precision before N4 is used
         quantization_config=quantization_config,  # ADD this line
     )
     if args.controlnet_model_name_or_path:
