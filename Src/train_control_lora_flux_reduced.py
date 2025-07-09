@@ -966,14 +966,14 @@ def main(args):
         subfolder="transformer",
         revision=args.revision,
         variant=args.variant,
-        # torch_dtype=weight_dtype, # REMOVE or comment out this line if N4 is used
+        torch_dtype=torch.float32, # load full precision before N4 is used
         quantization_config=quantization_config,  # ADD this line
     )
     if args.controlnet_model_name_or_path:
         logger.info("Loading existing ControlNet weights")
         flux_controlnet = FluxControlNetModel.from_pretrained(
             args.controlnet_model_name_or_path,
-            # torch_dtype=torch.float16 # REMOVE or comment out this line if N4 is used
+            torch_dtype=torch.float32,  # load full precision before N4 is used
             quantization_config=quantization_config,  # ADD this line
         )
     else:
