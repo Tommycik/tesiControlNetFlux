@@ -25,17 +25,16 @@ def main():
         "--image_column", "image",
         "--caption_column", "prompt",
         "--jsonl_for_train", "./controlnet_dataset/dataset.jsonl",
-        "--resolution", "128",  # ⬅️ reduced from 512
-        "--learning_rate", "1e-4",
-        "--max_train_steps", "1000",
+        "--resolution", "256",  # ⬅️ reduced from 512
+        "--learning_rate 5e-5",
+        "--max_train_steps", "500",
         "--checkpointing_steps", "250",
         "--validation_steps", "500",  # ⬅️ less frequent validation
-        "--mixed_precision", "fp16",  # ⬅️ use fp8
+        "--mixed_precision", "fp16",
         "--validation_image", "controlnet_dataset/images/sample_0000.jpg",
-        "--validation_prompt",
-        "transparent glass on white background, the bottom part of the glass presents light grooves",
+        "--validation_prompt", "transparent glass on white background, the bottom part of the glass presents light grooves",
         "--train_batch_size", "1",  # ⬅️ lower batch
-        "--gradient_accumulation_steps", "1",  # ⬅️ to maintain effective batch
+        "--gradient_accumulation_steps", "4",  # ⬅️ to maintain effective batch
         "--gradient_checkpointing",
         "--use_8bit_adam",
         "--enable_model_cpu_offload",
@@ -43,9 +42,9 @@ def main():
 
         # LoRA-specific
         "--use_lora",
-        "--lora_rank", "2",
-        "--lora_alpha", "16",
-        "--lora_dropout", "0.05",
+        "--lora_rank", "8",
+        "--lora_alpha", "32",
+        "--lora_dropout", "0.1",
 
         "--push_to_hub",
         "--hub_model_id", "tommycik/controlFluxAlcol-LoRAReduced"
