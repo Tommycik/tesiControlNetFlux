@@ -1,8 +1,6 @@
-numpy==2.1.0
-scipy
-accelerate
+accelerate>=0.16.0
 torchvision
-transformers
+transformers>=4.25.1
 ftfy
 tensorboard
 Jinja2
@@ -12,12 +10,3 @@ SentencePiece
 opencv-python
 torch
 diffusers
-peft
-deepspeed
-Pillow
-tqdm
-networkx
-scikit-learn
-huggingface_hub
-packaging
-bitsandbytes
