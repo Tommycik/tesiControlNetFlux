@@ -26,7 +26,7 @@ def main():
         "--caption_column", "prompt",
         "--jsonl_for_train", "./controlnet_dataset/dataset.jsonl",
         "--resolution", "256",  # ⬅️ reduced from 512
-        "--learning_rate 5e-5",
+        "--learning_rate", "5e-5",
         "--max_train_steps", "500",
         "--checkpointing_steps", "250",
         "--validation_steps", "500",  # ⬅️ less frequent validation
