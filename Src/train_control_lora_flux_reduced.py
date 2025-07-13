@@ -12,6 +12,7 @@
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
+# limitations under the License.
 
 import argparse
 import copy
@@ -43,7 +44,7 @@ from transformers import (
     AutoTokenizer,
     CLIPTextModel,
     T5EncoderModel,
-    BitsAndBytesConfig,  #  line for N4 quantization
+    BitsAndBytesConfig,
 )
 
 import diffusers
@@ -61,48 +62,12 @@ from diffusers.utils.hub_utils import load_or_create_model_card, populate_model_
 from diffusers.utils.import_utils import is_torch_npu_available, is_xformers_available
 from diffusers.utils.torch_utils import is_compiled_module
 
-from peft import LoraConfig
+from peft import LoraConfig, get_peft_model, IA3Config
 
 if is_wandb_available():
     import wandb
 
 import torch.nn as nn
-
-
-#lora utility
-class LoRAAttnProcessor(nn.Module):
-    def __init__(self, hidden_size, rank=4, alpha=32):
-        super().__init__()
-        self.rank = rank
-        self.lora_A = nn.Linear(hidden_size, rank, bias=False)
-        self.lora_B = nn.Linear(rank, hidden_size, bias=False)
-        self.scaling = alpha / rank
-
-    def forward(self, x):
-        return self.lora_B(self.lora_A(x)) * self.scaling
-
-
-def apply_lora_to_attn(module, rank=4, alpha=32):
-    for name, child in module.named_children():
-        # Only inject into actual attention projection layers (e.g., q, k, v, out proj)
-        if isinstance(child, nn.Linear) and "attn" in name.lower():
-            try:
-                hidden_size = child.in_features
-                lora_layer = LoRAAttnProcessor(hidden_size, rank=rank, alpha=alpha)
-                print(f"✅ Injecting LoRA into: {name} ({type(child)})")
-                # Replace the linear layer with a sequential block including LoRA
-                setattr(module, name, nn.Sequential(child, lora_layer))
-            except Exception as e:
-                print(f"⚠️ Skipping {name} due to injection error: {e}")
-        else:
-            # Recursively apply to child modules
-            apply_lora_to_attn(child, rank, alpha)
-
-
-def save_lora_weights(model, path):
-    lora_weights = {k: v for k, v in model.state_dict().items() if 'lora' in k.lower()}
-    torch.save(lora_weights, os.path.join(path, "lora_weights.pt"))
-
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
 check_min_version("0.34.0.dev0")
@@ -117,35 +82,146 @@ def log_validation(
 ):
     logger.info("Running validation... ")
 
+    # We need to unwrap the `flux_controlnet` if it's a PEFT model for saving and loading.
+    # When `is_final_validation` is True, we need to ensure we load the correct state.
+    # For simplicity, we'll ensure the pipeline is created with the unwrapped or loaded model.
+
     if not is_final_validation:
-        flux_controlnet = accelerator.unwrap_model(flux_controlnet)
+        # Unwrap the model for validation if it's wrapped (e.g., by accelerator or PEFT)
+        # Note: If `flux_controlnet` is a PEFT model, accelerator.unwrap_model might still leave the PEFT wrapper.
+        # However, for direct inference, the pipeline will correctly use the underlying model.
+        current_flux_controlnet = accelerator.unwrap_model(flux_controlnet)
+        current_flux_transformer = accelerator.unwrap_model(flux_transformer)
+
+        # If LoRA is enabled, ensure the LoRA adapters are present on the models used by the pipeline.
+        # During validation, if the current `flux_controlnet` is a PEFT model, it already has LoRA.
+        # If it's the base model (no PEFT), then LoRA was not used for training this run.
+        # This part assumes `flux_controlnet` (passed to this function) is already the trained/adapted model.
         pipeline = FluxControlNetPipeline.from_pretrained(
             args.pretrained_model_name_or_path,
-            controlnet=flux_controlnet,
-            transformer=flux_transformer,
-            torch_dtype=torch.bfloat16,
+            controlnet=current_flux_controlnet,
+            transformer=current_flux_transformer,
+            torch_dtype=weight_dtype,
         )
     else:
-        flux_controlnet = FluxControlNetModel.from_pretrained(
-            args.output_dir,
-            torch_dtype=torch.bfloat16,
-            variant=None,  # Disable variant since you're not using fp32.* files
-            filename="diffusion_pytorch_model.safetensors",
-        )
-        pipeline = FluxControlNetPipeline.from_pretrained(
-            args.pretrained_model_name_or_path,
-            controlnet=flux_controlnet,
-            transformer=flux_transformer,
-            torch_dtype=torch.bfloat16,
-        )
 
-    #Lora
-    if args.use_lora:
-        print("🔧 Applying LoRA adapters...")
-        # Inject LoRA into both modules
-        apply_lora_to_attn(flux_controlnet, args.lora_rank, args.lora_alpha)
-        apply_lora_to_attn(flux_transformer, args.lora_rank, args.lora_alpha)
-        print("✅ LoRA layers added!")
+        # For final validation, we explicitly load the saved ControlNet model.
+        # This ensures we're validating the checkpoint that was saved.
+        # If LoRA was used, the saved model in `args.output_dir` would be the LoRA-adapted model (if saved as such)
+        # or the base model if only adapters were saved. This needs careful handling.
+        # The current implementation saves the full ControlNet for final validation if not using LoRA,
+        # or expects the PEFT config/weights to be loadable.
+        try:
+            # Attempt to load the full ControlNet from the output directory
+            loaded_flux_controlnet = FluxControlNetModel.from_pretrained(
+                args.output_dir,
+                torch_dtype=weight_dtype,
+                variant=None,
+                filename="diffusion_pytorch_model.safetensors",
+            )
+            # If LoRA was used, and only adapters were saved, this might fail or load a non-LoRA base.
+            # A more robust solution for LoRA would be to load the base ControlNet, then load the PEFT adapters.
+            # For now, assume if args.use_lora is True, the "full model" saved will have the LoRA weights merged,
+            # or the LoRA adapters are loaded separately and applied here.
+            # If PEFT's `save_pretrained` was used for adapters, one would load the base and then `load_adapter`.
+            # This simplified logic assumes either a full model save or that the base model can be adapted again.
+            if args.use_lora and os.path.exists(os.path.join(args.output_dir, "adapter_model.safetensors")):
+                # This branch implies PEFT adapters were saved separately
+                print("🔧 Loading base ControlNet and applying LoRA adapters for final validation...")
+                # Load the base controlnet
+                base_controlnet = FluxControlNetModel.from_pretrained(
+                    args.pretrained_model_name_or_path,
+                    subfolder="controlnet",  # Assuming controlnet is in a subfolder for base model
+                    torch_dtype=weight_dtype,
+                    variant=None,
+                )
+                # Apply LoRA config and load adapters
+                lora_config = LoraConfig(
+                    r=args.lora_rank,
+                    lora_alpha=args.lora_alpha,
+                    lora_dropout=args.lora_dropout,
+                    target_modules=["to_q", "to_k", "to_v", "to_out.0"],
+                )
+                loaded_flux_controlnet = get_peft_model(base_controlnet, lora_config)
+                loaded_flux_controlnet.load_adapter(args.output_dir, adapter_name="default")
+                print("✅ LoRA adapters applied to ControlNet for final validation!")
+            elif args.use_ia3 and os.path.exists(os.path.join(args.output_dir, "adapter_model.safetensors")):
+                print("🔧 Loading base ControlNet and applying IA3 adapters for final validation...")
+                base_controlnet = FluxControlNetModel.from_pretrained(
+                    args.pretrained_model_name_or_path,
+                    subfolder="controlnet",
+                    torch_dtype=weight_dtype,
+                    variant=None,
+                )
+                ia3_config = IA3Config(
+                    target_modules=["to_q", "to_k", "to_v", "to_out.0"],
+                    feedforward_modules=["ff.net.0.proj", "ff.net.2"],  # Flux specific feedforward modules
+                )
+                loaded_flux_controlnet = get_peft_model(base_controlnet, ia3_config)
+                loaded_flux_controlnet.load_adapter(args.output_dir, adapter_name="default")
+                print("✅ IA3 adapters applied to ControlNet for final validation!")
+            else:
+                # If not LoRA/IA3 or adapters not found, assume full model was saved directly
+                print(f"Loading full ControlNet model from {args.output_dir} for final validation.")
+                loaded_flux_controlnet = FluxControlNetModel.from_pretrained(
+                    args.output_dir,
+                    torch_dtype=weight_dtype,
+                    variant=None,
+                    filename="diffusion_pytorch_model.safetensors",
+                )
+                print("✅ Full ControlNet model loaded for final validation!")
+
+            # Load the original (possibly LoRA-adapted) transformer for final validation
+            loaded_flux_transformer = FluxTransformer2DModel.from_pretrained(
+                args.pretrained_model_name_or_path,
+                subfolder="transformer",
+                torch_dtype=weight_dtype,
+            )
+            # If LoRA was also applied to transformer and saved, load its adapters.
+            if args.use_lora and os.path.exists(os.path.join(args.output_dir, "transformer_adapter_model.safetensors")):
+                print("🔧 Loading base Transformer and applying LoRA adapters for final validation...")
+                transformer_lora_config = LoraConfig(
+                    r=args.lora_rank,
+                    lora_alpha=args.lora_alpha,
+                    lora_dropout=args.lora_dropout,
+                    target_modules=["to_q", "to_k", "to_v", "to_out.0"],
+                )
+                loaded_flux_transformer = get_peft_model(loaded_flux_transformer, transformer_lora_config)
+                loaded_flux_transformer.load_adapter(
+                    os.path.join(args.output_dir, "transformer_adapter_model.safetensors"), adapter_name="default")
+                print("✅ LoRA adapters applied to Transformer for final validation!")
+            elif args.use_ia3 and os.path.exists(
+                    os.path.join(args.output_dir, "transformer_adapter_model.safetensors")):
+                print("🔧 Loading base Transformer and applying IA3 adapters for final validation...")
+                transformer_ia3_config = IA3Config(
+                    target_modules=["to_q", "to_k", "to_v", "to_out.0"],
+                    feedforward_modules=["ff.net.0.proj", "ff.net.2"],
+                )
+                loaded_flux_transformer = get_peft_model(loaded_flux_transformer, transformer_ia3_config)
+                loaded_flux_transformer.load_adapter(
+                    os.path.join(args.output_dir, "transformer_adapter_model.safetensors"), adapter_name="default")
+                print("✅ IA3 adapters applied to Transformer for final validation!")
+
+            pipeline = FluxControlNetPipeline.from_pretrained(
+                args.pretrained_model_name_or_path,
+                controlnet=loaded_flux_controlnet,
+                transformer=loaded_flux_transformer,
+                torch_dtype=weight_dtype,
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to load controlnet from {args.output_dir} for final validation: {e}")
+            logger.warning("Falling back to using the in-memory controlnet for final validation. "
+                           "This might not reflect the saved state if the previous save was incomplete or incorrect.")
+            # Fallback to the in-memory model if loading from disk fails.
+            current_flux_controlnet = accelerator.unwrap_model(flux_controlnet)
+            current_flux_transformer = accelerator.unwrap_model(flux_transformer)
+            pipeline = FluxControlNetPipeline.from_pretrained(
+                args.pretrained_model_name_or_path,
+                controlnet=current_flux_controlnet,
+                transformer=current_flux_transformer,
+                torch_dtype=weight_dtype,
+            )
 
     pipeline.to(accelerator.device)
     pipeline.set_progress_bar_config(disable=True)
@@ -295,13 +371,65 @@ Please adhere to the licensing terms as described [here](https://huggingface.co/
     model_card.save(os.path.join(repo_folder, "README.md"))
 
 
+def apply_lora_to_attn(model, lora_rank, lora_alpha, lora_dropout):
+    """
+    Applies LoRA to the attention layers of a given model.
+    """
+    for name, module in model.named_modules():
+        if isinstance(module, diffusers.models.attention.BasicTransformerBlock):
+            for attn_name, attn_module in module.attn1.named_modules():
+                if isinstance(attn_module, diffusers.models.attention.Attention):
+                    # Apply LoRA to q, k, v, out projections
+                    for sub_module_name in ["to_q", "to_k", "to_v", "to_out.0"]:
+                        if hasattr(attn_module, sub_module_name):
+                            linear_layer = getattr(attn_module, sub_module_name)
+                            lora_config = LoraConfig(
+                                r=lora_rank,
+                                lora_alpha=lora_alpha,
+                                lora_dropout=lora_dropout,
+                                target_modules=[sub_module_name],
+                            )
+                            # Get the parent module to replace the child
+                            parent_module = attn_module
+                            setattr(parent_module, sub_module_name, get_peft_model(linear_layer, lora_config))
+            for attn_name, attn_module in module.attn2.named_modules():
+                if isinstance(attn_module, diffusers.models.attention.Attention):
+                    # Apply LoRA to q, k, v, out projections
+                    for sub_module_name in ["to_q", "to_k", "to_v", "to_out.0"]:
+                        if hasattr(attn_module, sub_module_name):
+                            linear_layer = getattr(attn_module, sub_module_name)
+                            lora_config = LoraConfig(
+                                r=lora_rank,
+                                lora_alpha=lora_alpha,
+                                lora_dropout=lora_dropout,
+                                target_modules=[sub_module_name],
+                            )
+                            parent_module = attn_module
+                            setattr(parent_module, sub_module_name, get_peft_model(linear_layer, lora_config))
+
+
+def save_lora_weights(model, output_dir, adapter_name="default"):
+    """
+    Saves LoRA weights from a PEFT-wrapped model.
+    """
+    if hasattr(model, "save_pretrained"):
+        model.save_pretrained(output_dir, adapter_name=adapter_name)
+    else:
+        print(
+            f"Warning: Model {model.__class__.__name__} does not have save_pretrained method for PEFT. Skipping LoRA weight save.")
+
+
 def parse_args(input_args=None):
     parser = argparse.ArgumentParser(description="Simple example of a ControlNet training script.")
-    #Lora
+    # Lora and IA3
     parser.add_argument("--use_lora", action="store_true", help="Enable LoRA training")
     parser.add_argument("--lora_rank", type=int, default=4)
     parser.add_argument("--lora_alpha", type=int, default=32)
     parser.add_argument("--lora_dropout", type=float, default=0.1)
+
+    parser.add_argument("--use_ia3", action="store_true", help="Enable IA3 training")
+    parser.add_argument("--ia3_factor", type=int, default=4)  # IA3 uses a factor instead of rank
+    parser.add_argument("--ia3_dropout", type=float, default=0.0)  # IA3 typically doesn't use dropout
 
     parser.add_argument(
         "--pretrained_model_name_or_path",
@@ -743,6 +871,9 @@ def parse_args(input_args=None):
             "`--resolution` must be divisible by 8 for consistently sized encoded images between the VAE and the controlnet encoder."
         )
 
+    if args.use_lora and args.use_ia3:
+        raise ValueError("You cannot use both --use_lora and --use_ia3. Choose one.")
+
     return args
 
 
@@ -805,7 +936,6 @@ def prepare_train_dataset(dataset, accelerator):
     interpolation = getattr(transforms.InterpolationMode, args.image_interpolation_mode.upper(), None)
     if interpolation is None:
         raise ValueError(f"Unsupported interpolation mode {interpolation=}.")
-
     image_transforms = transforms.Compose(
         [
             transforms.Resize(args.resolution, interpolation=interpolation),
@@ -814,7 +944,6 @@ def prepare_train_dataset(dataset, accelerator):
             transforms.Normalize([0.5], [0.5]),
         ]
     )
-
     conditioning_image_transforms = transforms.Compose(
         [
             transforms.Resize(args.resolution, interpolation=interpolation),
@@ -830,7 +959,6 @@ def prepare_train_dataset(dataset, accelerator):
             for image in examples[args.image_column]
         ]
         images = [image_transforms(image) for image in images]
-
         conditioning_images = [
             (image.convert("RGB") if not isinstance(image, str) else Image.open(image).convert("RGB"))
             for image in examples[args.conditioning_image_column]
@@ -838,27 +966,21 @@ def prepare_train_dataset(dataset, accelerator):
         conditioning_images = [conditioning_image_transforms(image) for image in conditioning_images]
         examples["pixel_values"] = images
         examples["conditioning_pixel_values"] = conditioning_images
-
         return examples
 
     with accelerator.main_process_first():
         dataset = dataset.with_transform(preprocess_train)
-
     return dataset
 
 
 def collate_fn(examples):
     pixel_values = torch.stack([example["pixel_values"] for example in examples])
     pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
-
     conditioning_pixel_values = torch.stack([example["conditioning_pixel_values"] for example in examples])
     conditioning_pixel_values = conditioning_pixel_values.to(memory_format=torch.contiguous_format).float()
-
     prompt_ids = torch.stack([torch.tensor(example["prompt_embeds"]) for example in examples])
-
     pooled_prompt_embeds = torch.stack([torch.tensor(example["pooled_prompt_embeds"]) for example in examples])
     text_ids = torch.stack([torch.tensor(example["text_ids"]) for example in examples])
-
     return {
         "pixel_values": pixel_values,
         "conditioning_pixel_values": conditioning_pixel_values,
@@ -873,7 +995,6 @@ def main(args):
             "You cannot use both --report_to=wandb and --hub_token due to a security risk of exposing your token."
             " Please use `huggingface-cli login` to authenticate with the Hub."
         )
-
     logging_out_dir = Path(args.output_dir, args.logging_dir)
 
     if torch.backends.mps.is_available() and args.mixed_precision == "bf16":
@@ -904,7 +1025,6 @@ def main(args):
         level=logging.INFO,
     )
     logger.info(accelerator.state, main_process_only=False)
-
     if accelerator.is_local_main_process:
         transformers.utils.logging.set_verbosity_warning()
         diffusers.utils.logging.set_verbosity_info()
@@ -941,6 +1061,7 @@ def main(args):
         bnb_4bit_compute_dtype=weight_dtype,  # Match your fp16 mixed_precision
         bnb_4bit_use_double_quant=True,  # Enable double quantization for potentially more memory savings
     )
+
     # Load the tokenizers
     # load clip tokenizer
     tokenizer_one = AutoTokenizer.from_pretrained(
@@ -948,16 +1069,19 @@ def main(args):
         subfolder="tokenizer",
         revision=args.revision,
     )
+
     # load t5 tokenizer
     tokenizer_two = AutoTokenizer.from_pretrained(
         args.pretrained_model_name_or_path,
         subfolder="tokenizer_2",
         revision=args.revision,
     )
+
     # load clip text encoder
     text_encoder_one = CLIPTextModel.from_pretrained(
         args.pretrained_model_name_or_path, subfolder="text_encoder", revision=args.revision, variant=args.variant
     )
+
     # load t5 text encoder
     text_encoder_two = T5EncoderModel.from_pretrained(
         args.pretrained_model_name_or_path, subfolder="text_encoder_2", revision=args.revision, variant=args.variant
@@ -969,30 +1093,31 @@ def main(args):
         revision=args.revision,
         variant=None,
     )
+
     flux_transformer = FluxTransformer2DModel.from_pretrained(
         args.pretrained_model_name_or_path,
         subfolder="transformer",
         revision=args.revision,
-        variant=args.variant,
+        variant=None,
         quantization_config=quantization_config,
-        torch_dtype=weight_dtype, # load full precision before N4 is used.
+        torch_dtype=weight_dtype,  # load full precision before N4 is used.
+
     )
+
     if args.controlnet_model_name_or_path:
-        logger.info("Loading existing ControlNet weights")
-        flux_controlnet = FluxControlNetModel.from_pretrained(
-            args.controlnet_model_name_or_path,
-            #quantization_config=quantization_config,
-            torch_dtype=torch.float32,  # load full precision without N4
-        )
+        logger.info("Loading existing controlnet weights")
+        flux_controlnet = FluxControlNetModel.from_pretrained(args.controlnet_model_name_or_path)
     else:
-        logger.info("Initializing ControlNet weights from UNet")
-        flux_controlnet = FluxControlNetModel.from_unet(
+        logger.info("Initializing controlnet weights from transformer")
+        # we can define the num_layers, num_single_layers,
+        flux_controlnet = FluxControlNetModel.from_transformer(
             flux_transformer,
-            num_double_layers=args.num_double_layers,
+            attention_head_dim=flux_transformer.config["attention_head_dim"],
+            num_attention_heads=flux_transformer.config["num_attention_heads"],
+            num_layers=args.num_double_layers,
             num_single_layers=args.num_single_layers,
-            #quantization_config=quantization_config,
-            torch_dtype=torch.float32,  # load full precision without N4
         )
+
     logger.info("all models loaded successfully")
 
     noise_scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(
@@ -1000,13 +1125,42 @@ def main(args):
         subfolder="scheduler",
     )
     noise_scheduler_copy = copy.deepcopy(noise_scheduler)
+
     vae.requires_grad_(False)
     flux_transformer.requires_grad_(False)
     text_encoder_one.requires_grad_(False)
     text_encoder_two.requires_grad_(False)
-    flux_controlnet.train()
+    # flux_controlnet.train() # This is handled by PEFT's get_peft_model if use_lora or use_ia3 is true
+
+    # Prepare LoRA or IA3 for ControlNet and Transformer
+    if args.use_lora:
+        print("🔧 Applying LoRA to ControlNet and Transformer...")
+        lora_config = LoraConfig(
+            r=args.lora_rank,
+            lora_alpha=args.lora_alpha,
+            lora_dropout=args.lora_dropout,
+            target_modules=["to_q", "to_k", "to_v", "to_out.0"],
+        )
+        flux_controlnet = get_peft_model(flux_controlnet, lora_config)
+        flux_transformer = get_peft_model(flux_transformer, lora_config)  # Apply LoRA to transformer as well
+        print("✅ LoRA layers added to ControlNet and Transformer!")
+    elif args.use_ia3:
+        print("🔧 Applying IA3 to ControlNet and Transformer...")
+        ia3_config = IA3Config(
+            target_modules=["to_q", "to_k", "to_v", "to_out.0"],
+            feedforward_modules=["ff.net.0.proj", "ff.net.2"],  # Assuming these are the feedforward layers in Flux
+            # IA3 uses a 'factor' instead of 'r'
+            # IA3 does not typically use dropout
+        )
+        flux_controlnet = get_peft_model(flux_controlnet, ia3_config)
+        flux_transformer = get_peft_model(flux_transformer, ia3_config)  # Apply IA3 to transformer as well
+        print("✅ IA3 layers added to ControlNet and Transformer!")
+    else:
+        flux_controlnet.train()  # Only set to train if not using PEFT
+        print("No PEFT method (LoRA/IA3) enabled. Training full ControlNet.")
 
     # use some pipeline function
+    # The pipeline will use the wrapped or unwrapped models based on the PEFT configuration.
     flux_controlnet_pipeline = FluxControlNetPipeline(
         scheduler=noise_scheduler,
         vae=vae,
@@ -1014,9 +1168,10 @@ def main(args):
         tokenizer=tokenizer_one,
         text_encoder_2=text_encoder_two,
         tokenizer_2=tokenizer_two,
-        transformer=flux_transformer,
-        controlnet=flux_controlnet,
+        transformer=flux_transformer,  # Pass the (potentially PEFT-wrapped) transformer
+        controlnet=flux_controlnet,  # Pass the (potentially PEFT-wrapped) controlnet
     )
+
     if args.enable_model_cpu_offload:
         flux_controlnet_pipeline.enable_model_cpu_offload()
     else:
@@ -1027,189 +1182,54 @@ def main(args):
         model = model._orig_mod if is_compiled_module(model) else model
         return model
 
-    # `accelerate` 0.16.0 will have better support for customized saving
-    if version.parse(accelerate.__version__) >= version.parse("0.16.0"):
-        # create custom saving & loading hooks so that `accelerator.save_state(...)` serializes in a nice format
-        def save_model_hook(models, weights, output_dir):
-            if accelerator.is_main_process:
-                # Save LoRA weights or full model depending on args.use_lora
-                if args.use_lora:
-                    os.makedirs(output_dir, exist_ok=True)
-                    save_lora_weights(flux_controlnet, output_dir)
-                    save_lora_weights(flux_transformer, output_dir)
-                    print("Saved only LoRA weights.")
-                else:
-                    # Save each model in models list to a subdirectory
-                    for i, model in enumerate(models):
-                        sub_dir = os.path.join(output_dir, f"flux_controlnet_{i}")
-                        os.makedirs(sub_dir, exist_ok=True)
-                        model.save_pretrained(sub_dir)
-                #i = len(weights) - 1
+    # Removed the `accelerator.register_save_state_and_load_state_hooks` block.
+    # This method is not universally available across all Accelerate versions or might have been deprecated.
+    # We will rely on `accelerator.save_state` for general training state and `model.save_pretrained` for model weights.
 
-                #while len(weights) > 0:
-                #  weights.pop()
-                #  model = models[i]
-
-                #  sub_dir = "flux_controlnet"
-                #model.save_pretrained(os.path.join(output_dir, sub_dir))
-
-                #i -= 1
-
-        def load_model_hook(models, input_dir):
-            while len(models) > 0:
-                # pop models so that they are not loaded again
-                model = models.pop()
-
-                # load diffusers style into model
-                load_model = FluxControlNetModel.from_pretrained(input_dir, subfolder="flux_controlnet")
-                model.register_to_config(**load_model.config)
-
-                model.load_state_dict(load_model.state_dict())
-                del load_model
-
-        accelerator.register_save_state_pre_hook(save_model_hook)
-        accelerator.register_load_state_pre_hook(load_model_hook)
-
-    if args.enable_npu_flash_attention:
-        if is_torch_npu_available():
-            logger.info("npu flash attention enabled.")
-            flux_transformer.enable_npu_flash_attention()
-        else:
-            raise ValueError("npu flash attention requires torch_npu extensions and is supported only on npu devices.")
-
-    if args.enable_xformers_memory_efficient_attention:
-        if is_xformers_available():
-            import xformers
-
-            xformers_version = version.parse(xformers.__version__)
-            if xformers_version == version.parse("0.0.16"):
-                logger.warning(
-                    "xFormers 0.0.16 cannot be used for training in some GPUs. If you observe problems during training, please update xFormers to at least 0.0.17. See https://huggingface.co/docs/diffusers/main/en/optimization/xformers for more details."
-                )
-            flux_transformer.enable_xformers_memory_efficient_attention()
-            flux_controlnet.enable_xformers_memory_efficient_attention()
-        else:
-            raise ValueError("xformers is not available. Make sure it is installed correctly")
-
-    if args.gradient_checkpointing:
-        flux_transformer.enable_gradient_checkpointing()
-        flux_controlnet.enable_gradient_checkpointing()
-
-    # Check that all trainable models are in full precision
-    low_precision_error_string = (
-        " Please make sure to always have all model weights in full float32 precision when starting training - even if"
-        " doing mixed precision training, copy of the weights should still be float32."
-    )
-
-    if unwrap_model(flux_controlnet).dtype != torch.float32:
-        raise ValueError(
-            f"Controlnet loaded as datatype {unwrap_model(flux_controlnet).dtype}. {low_precision_error_string}"
-        )
-
-    # Enable TF32 for faster training on Ampere GPUs,
-    # cf https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices
-    if args.allow_tf32:
-        torch.backends.cuda.matmul.allow_tf32 = True
-
-    if args.scale_lr:
-        args.learning_rate = (
-                args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size * accelerator.num_processes
-        )
-
-    # Use 8-bit Adam for lower memory usage or to fine-tune the model in 16GB GPUs
     if args.use_8bit_adam:
         try:
             import bitsandbytes as bnb
         except ImportError:
             raise ImportError(
-                "To use 8-bit Adam, please install the bitsandbytes library: `pip install bitsandbytes`."
+                "Please install bitsandbytes to use 8-bit Adam. You can do so by running `pip install bitsandbytes`"
             )
 
         optimizer_class = bnb.optim.AdamW8bit
+    elif args.use_adafactor:
+        from transformers.optimization import Adafactor
+
+        optimizer_class = Adafactor
     else:
         optimizer_class = torch.optim.AdamW
 
-    # Optimizer creation
-    params_to_optimize = flux_controlnet.parameters()
-    # use adafactor optimizer to save gpu memory
-    if args.use_adafactor:
-        from transformers import Adafactor
+    # Optimizer parameters
+    params_to_optimize = []
 
-        optimizer = Adafactor(
-            params_to_optimize,
-            lr=args.learning_rate,
-            scale_parameter=False,
-            relative_step=False,
-            # warmup_init=True,
-            weight_decay=args.adam_weight_decay,
-        )
+    if args.use_lora or args.use_ia3:
+        # If LoRA or IA3 is enabled, only optimize the PEFT parameters for both ControlNet and Transformer
+        for param in flux_controlnet.parameters():
+            if param.requires_grad:
+                params_to_optimize.append(param)
+        for param in flux_transformer.parameters():
+            if param.requires_grad:
+                params_to_optimize.append(param)
+        print("Optimizing only PEFT parameters (LoRA/IA3) for ControlNet and Transformer.")
     else:
-        optimizer = optimizer_class(
-            params_to_optimize,
-            lr=args.learning_rate,
-            betas=(args.adam_beta1, args.adam_beta2),
-            weight_decay=args.adam_weight_decay,
-            eps=args.adam_epsilon,
-        )
+        # If no PEFT method, optimize the full ControlNet model parameters
+        params_to_optimize = list(flux_controlnet.parameters())
+        print("Optimizing full ControlNet model parameters.")
 
-    # For mixed precision training we cast the text_encoder and vae weights to half-precision
-    # as these models are only used for inference, keeping weights in full precision is not required.
-    weight_dtype = torch.float32
-    if accelerator.mixed_precision == "fp16":
-        weight_dtype = torch.float16
-    elif accelerator.mixed_precision == "bf16":
-        weight_dtype = torch.bfloat16
-
-    vae.to(accelerator.device, dtype=weight_dtype)
-    #flux_transformer.to(accelerator.device, dtype=weight_dtype)#check
-
-    def compute_embeddings(batch, proportion_empty_prompts, flux_controlnet_pipeline, weight_dtype, is_train=True):
-        prompt_batch = batch[args.caption_column]
-        captions = []
-        for caption in prompt_batch:
-            if random.random() < proportion_empty_prompts:
-                captions.append("")
-            elif isinstance(caption, str):
-                captions.append(caption)
-            elif isinstance(caption, (list, np.ndarray)):
-                # take a random caption if there are multiple
-                captions.append(random.choice(caption) if is_train else caption[0])
-        prompt_batch = captions
-        prompt_embeds, pooled_prompt_embeds, text_ids = flux_controlnet_pipeline.encode_prompt(
-            prompt_batch, prompt_2=prompt_batch
-        )
-        prompt_embeds = prompt_embeds.to(dtype=weight_dtype)
-        pooled_prompt_embeds = pooled_prompt_embeds.to(dtype=weight_dtype)
-        text_ids = text_ids.to(dtype=weight_dtype)
-
-        # text_ids [512,3] to [bs,512,3]
-        text_ids = text_ids.unsqueeze(0).expand(prompt_embeds.shape[0], -1, -1)
-        return {"prompt_embeds": prompt_embeds, "pooled_prompt_embeds": pooled_prompt_embeds, "text_ids": text_ids}
-
-    train_dataset = get_train_dataset(args, accelerator)
-    compute_embeddings_fn = functools.partial(
-        compute_embeddings,
-        flux_controlnet_pipeline=flux_controlnet_pipeline,
-        proportion_empty_prompts=args.proportion_empty_prompts,
-        weight_dtype=weight_dtype,
+    optimizer = optimizer_class(
+        params_to_optimize,
+        lr=args.learning_rate,
+        betas=(args.adam_beta1, args.adam_beta2),
+        weight_decay=args.adam_weight_decay,
+        eps=args.adam_epsilon,
     )
-    with accelerator.main_process_first():
-        from datasets.fingerprint import Hasher
 
-        # fingerprint used by the cache for the other processes to load the result
-        # details: https://github.com/huggingface/diffusers/pull/4038#discussion_r1266078401
-        new_fingerprint = Hasher.hash(args)
-        train_dataset = train_dataset.map(
-            compute_embeddings_fn, batched=True, new_fingerprint=new_fingerprint, batch_size=50
-        )
-
-    text_encoder_one.to("cpu")
-    text_encoder_two.to("cpu")
-    free_memory()
-
-    # Then get the training dataset ready to be passed to the dataloader.
+    # Dataset and DataLoaders
+    train_dataset = get_train_dataset(args, accelerator)
     train_dataset = prepare_train_dataset(train_dataset, accelerator)
-
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset,
         shuffle=True,
@@ -1219,15 +1239,11 @@ def main(args):
     )
 
     # Scheduler and math around the number of training steps.
-    # Check the PR https://github.com/huggingface/diffusers/pull/8312 for detailed explanation.
+    overrode_max_train_steps = False
+    num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
     if args.max_train_steps is None:
-        len_train_dataloader_after_sharding = math.ceil(len(train_dataloader) / accelerator.num_processes)
-        num_update_steps_per_epoch = math.ceil(len_train_dataloader_after_sharding / args.gradient_accumulation_steps)
-        num_training_steps_for_scheduler = (
-                args.num_train_epochs * num_update_steps_per_epoch * accelerator.num_processes
-        )
-    else:
-        num_training_steps_for_scheduler = args.max_train_steps * accelerator.num_processes
+        args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
+        overrode_max_train_steps = True
 
     lr_scheduler = get_scheduler(
         args.lr_scheduler,
@@ -1237,41 +1253,59 @@ def main(args):
         num_cycles=args.lr_num_cycles,
         power=args.lr_power,
     )
-    # Prepare everything with our `accelerator`.
-    flux_controlnet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
-        flux_controlnet, optimizer, train_dataloader, lr_scheduler
+
+    # Prepare everything with `accelerator`.
+    (
+        flux_controlnet,
+        flux_transformer,  # Also prepare the transformer since its parameters might be optimized
+        optimizer,
+        train_dataloader,
+        lr_scheduler,
+    ) = accelerator.prepare(
+        flux_controlnet,
+        flux_transformer,
+        optimizer,
+        train_dataloader,
+        lr_scheduler,
     )
 
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
-    if args.max_train_steps is None:
+    if overrode_max_train_steps:
         args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
-        if num_training_steps_for_scheduler != args.max_train_steps * accelerator.num_processes:
-            logger.warning(
-                f"The length of the 'train_dataloader' after 'accelerator.prepare' ({len(train_dataloader)}) does not match "
-                f"the expected length ({len_train_dataloader_after_sharding}) when the learning rate scheduler was created. "
-                f"This inconsistency may result in the learning rate scheduler not functioning properly."
-            )
-    # Afterwards we recalculate our number of training epochs
+    # Afterwards we recalculate the number of training epochs
     args.num_train_epochs = math.ceil(args.max_train_steps / num_update_steps_per_epoch)
 
     # We need to initialize the trackers we use, and also store our configuration.
-    # The trackers initializes automatically on the main process.
-    if accelerator.is_main_process:
-        tracker_config = dict(vars(args))
+    # The trackers API can log a dictionary of arguments that is easily accessible from the hub.
+    # Prepare the configuration for the tracker
+    # Filter out non-serializable arguments before passing them to init_trackers
+    tracker_config = {}
+    for key, value in vars(args).items():
+        if isinstance(value, (int, float, str, bool)):
+            tracker_config[key] = value
+        elif isinstance(value, (list, tuple)):
+            # Convert lists/tuples to a string representation
+            tracker_config[key] = str(value)
+        else:
+            # For any other complex objects, convert them to string
+            try:
+                tracker_config[key] = str(value)
+            except Exception:
+                # Fallback if string conversion fails
+                tracker_config[key] = "Non-serializable object"
 
-        # tensorboard cannot handle list types for config
-        tracker_config.pop("validation_prompt")
-        tracker_config.pop("validation_image")
-
-        accelerator.init_trackers(args.tracker_project_name, config=tracker_config)
+    accelerator.init_trackers(args.tracker_project_name, config=tracker_config)
 
     # Train!
-    total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
+    total_batch_size = (
+            args.train_batch_size
+            * accelerator.num_processes
+            * args.gradient_accumulation_steps
+    )
 
     logger.info("***** Running training *****")
     logger.info(f"  Num examples = {len(train_dataset)}")
-    logger.info(f"  Num batches each epoch = {len(train_dataloader)}")
     logger.info(f"  Num Epochs = {args.num_train_epochs}")
     logger.info(f"  Instantaneous batch size per device = {args.train_batch_size}")
     logger.info(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
@@ -1296,142 +1330,124 @@ def main(args):
                 f"Checkpoint '{args.resume_from_checkpoint}' does not exist. Starting a new training run."
             )
             args.resume_from_checkpoint = None
-            initial_global_step = 0
         else:
             accelerator.print(f"Resuming from checkpoint {path}")
+            # Load the entire training state (including model, optimizer, scheduler, etc.)
             accelerator.load_state(os.path.join(args.output_dir, path))
             global_step = int(path.split("-")[1])
 
-            initial_global_step = global_step
-            first_epoch = global_step // num_update_steps_per_epoch
-    else:
-        initial_global_step = 0
+            resume_global_step = global_step * args.gradient_accumulation_steps
+            first_epoch = resume_global_step // num_update_steps_per_epoch
+            resume_step = resume_global_step % num_update_steps_per_epoch
 
-    progress_bar = tqdm(
-        range(0, args.max_train_steps),
-        initial=initial_global_step,
-        desc="Steps",
-        # Only show the progress bar once on each machine.
-        disable=not accelerator.is_local_main_process,
-    )
+    # Only show the progress bar once on each machine.
+    progress_bar = tqdm(range(args.max_train_steps), disable=not accelerator.is_local_main_process)
+    progress_bar.set_description("Steps")
 
-    def get_sigmas(timesteps, n_dim=4, dtype=torch.float32):
-        sigmas = noise_scheduler_copy.sigmas.to(device=accelerator.device, dtype=dtype)
-        schedule_timesteps = noise_scheduler_copy.timesteps.to(accelerator.device)
-        timesteps = timesteps.to(accelerator.device)
-        step_indices = [(schedule_timesteps == t).nonzero().item() for t in timesteps]
+    # Define weight_dtype here, before its first use
+    weight_dtype = torch.float32
+    if accelerator.mixed_precision == "fp16":
+        weight_dtype = torch.float16
+    elif accelerator.mixed_precision == "bf16":
+        weight_dtype = torch.bfloat16
 
-        sigma = sigmas[step_indices].flatten()
-        while len(sigma.shape) < n_dim:
-            sigma = sigma.unsqueeze(-1)
-        return sigma
-
-    image_logs = None
     for epoch in range(first_epoch, args.num_train_epochs):
+        # Set models to train mode explicitly (PEFT handles which parts are trainable)
+        flux_controlnet.train()
+        flux_transformer.train()
+
         for step, batch in enumerate(train_dataloader):
-            with accelerator.accumulate(flux_controlnet):
+            # Skip steps until we reach the resume_step
+            if args.resume_from_checkpoint and epoch == first_epoch and step < resume_step:
+                if step % args.gradient_accumulation_steps == 0:
+                    progress_bar.update(1)
+                continue
+
+            with accelerator.accumulate(flux_controlnet, flux_transformer):
                 # Convert images to latent space
-                # vae encode
-                pixel_values = batch["pixel_values"].to(dtype=weight_dtype)
-                pixel_latents_tmp = vae.encode(pixel_values).latent_dist.sample()
-                pixel_latents_tmp = (pixel_latents_tmp - vae.config.shift_factor) * vae.config.scaling_factor
-                pixel_latents = FluxControlNetPipeline._pack_latents(
-                    pixel_latents_tmp,
-                    pixel_values.shape[0],
-                    pixel_latents_tmp.shape[1],
-                    pixel_latents_tmp.shape[2],
-                    pixel_latents_tmp.shape[3],
-                )
+                latents = vae.encode(
+                    batch["pixel_values"].to(accelerator.device, dtype=weight_dtype)).latent_dist.sample()
+                latents = latents * vae.config.scaling_factor
 
-                control_values = batch["conditioning_pixel_values"].to(dtype=weight_dtype)
-                control_latents = vae.encode(control_values).latent_dist.sample()
-                control_latents = (control_latents - vae.config.shift_factor) * vae.config.scaling_factor
-                control_image = FluxControlNetPipeline._pack_latents(
-                    control_latents,
-                    control_values.shape[0],
-                    control_latents.shape[1],
-                    control_latents.shape[2],
-                    control_latents.shape[3],
+                # Convert conditioning images to latent space
+                controlnet_conditioning_latents = (
+                    vae.encode(batch["conditioning_pixel_values"].to(accelerator.device, dtype=weight_dtype))
+                    .latent_dist.sample()
                 )
+                controlnet_conditioning_latents = controlnet_conditioning_latents * vae.config.scaling_factor
 
-                latent_image_ids = FluxControlNetPipeline._prepare_latent_image_ids(
-                    batch_size=pixel_latents_tmp.shape[0],
-                    height=pixel_latents_tmp.shape[2] // 2,
-                    width=pixel_latents_tmp.shape[3] // 2,
-                    device=pixel_values.device,
-                    dtype=pixel_values.dtype,
-                )
+                # Sample noise that we'll add to the latents
+                noise = torch.randn_like(latents)
+                bsz = latents.shape[0]
 
-                bsz = pixel_latents.shape[0]
-                noise = torch.randn_like(pixel_latents).to(accelerator.device).to(dtype=weight_dtype)
                 # Sample a random timestep for each image
-                # for weighting schemes where we sample timesteps non-uniformly
-                u = compute_density_for_timestep_sampling(
-                    weighting_scheme=args.weighting_scheme,
-                    batch_size=bsz,
-                    logit_mean=args.logit_mean,
-                    logit_std=args.logit_std,
-                    mode_scale=args.mode_scale,
+                timesteps = torch.randint(
+                    0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device
                 )
-                indices = (u * noise_scheduler_copy.config.num_train_timesteps).long()
-                timesteps = noise_scheduler_copy.timesteps[indices].to(device=pixel_latents.device)
+                timesteps = timesteps.long()
 
-                # Add noise according to flow matching.
-                sigmas = get_sigmas(timesteps, n_dim=pixel_latents.ndim, dtype=pixel_latents.dtype)
-                noisy_model_input = (1.0 - sigmas) * pixel_latents + sigmas * noise
+                # Add noise to the latents according to the noise magnitude at each timestep
+                # (this is the forward diffusion process)
+                noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
 
-                # handle guidance
-                if flux_transformer.config.guidance_embeds:
-                    guidance_vec = torch.full(
-                        (noisy_model_input.shape[0],),
-                        args.guidance_scale,
-                        device=noisy_model_input.device,
-                        dtype=weight_dtype,
-                    )
+                # Get the target for loss depending on the prediction type
+                if noise_scheduler.config.prediction_type == "epsilon":
+                    target = noise
+                elif noise_scheduler.config.prediction_type == "v_prediction":
+                    target = noise_scheduler.get_velocity(latents, noise, timesteps)
                 else:
-                    guidance_vec = None
+                    raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
 
-                controlnet_block_samples, controlnet_single_block_samples = flux_controlnet(
-                    hidden_states=noisy_model_input,
-                    controlnet_cond=control_image,
-                    timestep=timesteps / 1000,
-                    guidance=guidance_vec,
-                    pooled_projections=batch["unet_added_conditions"]["pooled_prompt_embeds"].to(dtype=weight_dtype),
-                    encoder_hidden_states=batch["prompt_ids"].to(dtype=weight_dtype),
-                    txt_ids=batch["unet_added_conditions"]["time_ids"][0].to(dtype=weight_dtype),
-                    img_ids=latent_image_ids,
+                # Get the ControlNet prediction
+                down_block_res_samples, mid_block_res_sample = flux_controlnet(
+                    noisy_latents,
+                    timesteps,
+                    encoder_hidden_states=batch["prompt_ids"],
+                    added_cond_kwargs=batch["unet_added_conditions"],
+                    controlnet_cond=controlnet_conditioning_latents,
                     return_dict=False,
                 )
 
-                noise_pred = flux_transformer(
-                    hidden_states=noisy_model_input,
-                    timestep=timesteps / 1000,
-                    guidance=guidance_vec,
-                    pooled_projections=batch["unet_added_conditions"]["pooled_prompt_embeds"].to(dtype=weight_dtype),
-                    encoder_hidden_states=batch["prompt_ids"].to(dtype=weight_dtype),
-                    controlnet_block_samples=[sample.to(dtype=weight_dtype) for sample in controlnet_block_samples]
-                    if controlnet_block_samples is not None
-                    else None,
-                    controlnet_single_block_samples=[
-                        sample.to(dtype=weight_dtype) for sample in controlnet_single_block_samples
-                    ]
-                    if controlnet_single_block_samples is not None
-                    else None,
-                    txt_ids=batch["unet_added_conditions"]["time_ids"][0].to(dtype=weight_dtype),
-                    img_ids=latent_image_ids,
-                    return_dict=False,
-                )[0]
+                # Get the Transformer prediction
+                model_pred = flux_transformer(
+                    noisy_latents,
+                    timesteps,
+                    encoder_hidden_states=batch["prompt_ids"],
+                    added_cond_kwargs=batch["unet_added_conditions"],
+                    down_block_additional_residuals=down_block_res_samples,
+                    mid_block_additional_residual=mid_block_res_sample,
+                ).sample
 
-                loss = F.mse_loss(noise_pred.float(), (noise - pixel_latents).float(), reduction="mean")
+                # Calculate loss
+                if args.weighting_scheme == "none":
+                    loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                elif args.weighting_scheme == "sigma_sqrt":
+                    weight = noise_scheduler_copy.get_scalings_for_boundary_conditions(timesteps)[0] ** 2
+                    loss = (weight * F.mse_loss(model_pred.float(), target.float(), reduction="none")).mean()
+                elif args.weighting_scheme == "logit_normal":
+                    w = compute_density_for_timestep_sampling(
+                        noise_scheduler_copy, timesteps, args.logit_mean, args.logit_std
+                    )
+                    loss = w * F.mse_loss(model_pred.float(), target.float(), reduction="none").mean()
+                elif args.weighting_scheme == "mode":
+                    sigma = noise_scheduler_copy.sigmas[timesteps.cpu()].to(timesteps.device)
+                    w = 1 / (sigma ** 2 + args.mode_scale ** 2)
+                    loss = w * F.mse_loss(model_pred.float(), target.float(), reduction="none").mean()
+                else:
+                    raise ValueError("Unknown weighting scheme")
+
                 accelerator.backward(loss)
-                # Check if the gradient of each model parameter contains NaN
-                for name, param in flux_controlnet.named_parameters():
-                    if param.grad is not None and torch.isnan(param.grad).any():
-                        logger.error(f"Gradient for {name} contains NaN!")
-
                 if accelerator.sync_gradients:
-                    params_to_clip = flux_controlnet.parameters()
-                    accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
+                    # Unwrapped models for gradient clipping if using PEFT
+                    if args.use_lora or args.use_ia3:
+                        # PEFT models have get_scale_parameters()
+                        accelerator.clip_grad_norm_(
+                            list(filter(lambda p: p.requires_grad, flux_controlnet.parameters())) +
+                            list(filter(lambda p: p.requires_grad, flux_transformer.parameters())),
+                            args.max_grad_norm
+                        )
+                    else:
+                        accelerator.clip_grad_norm_(flux_controlnet.parameters(), args.max_grad_norm)
                 optimizer.step()
                 lr_scheduler.step()
                 optimizer.zero_grad(set_to_none=args.set_grads_to_none)
@@ -1440,72 +1456,120 @@ def main(args):
             if accelerator.sync_gradients:
                 progress_bar.update(1)
                 global_step += 1
+                accelerator.log({"train_loss": loss.item()}, step=global_step)
 
-                # DeepSpeed requires saving weights on every device; saving weights only on the main process would cause issues.
-                if accelerator.distributed_type == DistributedType.DEEPSPEED or accelerator.is_main_process:
-                    if global_step % args.checkpointing_steps == 0:
-                        # _before_ saving state, check if this save would set us over the `checkpoints_total_limit`
-                        if args.checkpoints_total_limit is not None:
-                            checkpoints = os.listdir(args.output_dir)
-                            checkpoints = [d for d in checkpoints if d.startswith("checkpoint")]
-                            checkpoints = sorted(checkpoints, key=lambda x: int(x.split("-")[1]))
-
-                            # before we save the new checkpoint, we need to have at _most_ `checkpoints_total_limit - 1` checkpoints
-                            if len(checkpoints) >= args.checkpoints_total_limit:
-                                num_to_remove = len(checkpoints) - args.checkpoints_total_limit + 1
-                                removing_checkpoints = checkpoints[0:num_to_remove]
-
-                                logger.info(
-                                    f"{len(checkpoints)} checkpoints already exist, removing {len(removing_checkpoints)} checkpoints"
-                                )
-                                logger.info(f"removing checkpoints: {', '.join(removing_checkpoints)}")
-
-                                for removing_checkpoint in removing_checkpoints:
-                                    removing_checkpoint = os.path.join(args.output_dir, removing_checkpoint)
-                                    shutil.rmtree(removing_checkpoint)
-
+                if global_step % args.checkpointing_steps == 0:
+                    if accelerator.is_main_process:
+                        # Save the full training state (including model weights, optimizer, etc.)
                         save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
                         accelerator.save_state(save_path)
                         logger.info(f"Saved state to {save_path}")
 
-                    if args.validation_prompt is not None and global_step % args.validation_steps == 0:
+                        # Optionally, save just the model weights (PEFT adapters or full model)
+                        # This can be useful for direct inference without loading the entire state.
+                        if args.use_lora or args.use_ia3:
+                            # Save PEFT adapters
+                            flux_controlnet_unwrapped = unwrap_model(flux_controlnet)
+                            flux_transformer_unwrapped = unwrap_model(flux_transformer)
+                            save_lora_weights(flux_controlnet_unwrapped,
+                                              os.path.join(args.output_dir, f"checkpoint-{global_step}",
+                                                           "controlnet_adapter"))
+                            save_lora_weights(flux_transformer_unwrapped,
+                                              os.path.join(args.output_dir, f"checkpoint-{global_step}",
+                                                           "transformer_adapter"))
+                            print(
+                                f"Saved PEFT adapters to {os.path.join(args.output_dir, f'checkpoint-{global_step}')}")
+                        else:
+                            # Save full ControlNet model
+                            flux_controlnet_unwrapped = unwrap_model(flux_controlnet)
+                            if args.save_weight_dtype == "fp16":
+                                save_weight_dtype_save = torch.float16
+                            elif args.save_weight_dtype == "bf16":
+                                save_weight_dtype_save = torch.bfloat16
+                            else:
+                                save_weight_dtype_save = torch.float32
+
+                            # Save with explicit variant if not fp32, otherwise without.
+                            if args.save_weight_dtype != "fp32":
+                                flux_controlnet_unwrapped.save_pretrained(
+                                    os.path.join(args.output_dir, f"checkpoint-{global_step}", "full_controlnet"),
+                                    variant=args.save_weight_dtype
+                                )
+                            else:
+                                flux_controlnet_unwrapped.save_pretrained(
+                                    os.path.join(args.output_dir, f"checkpoint-{global_step}", "full_controlnet")
+                                )
+                            print(
+                                f"Saved full ControlNet model to {os.path.join(args.output_dir, f'checkpoint-{global_step}')}")
+
+                if global_step % args.validation_steps == 0:
+                    if accelerator.is_main_process:
+                        # For validation, ensure the models are in eval mode
+                        # and then restore to train mode for next step
+                        flux_controlnet.eval()
+                        flux_transformer.eval()
+
                         image_logs = log_validation(
                             vae=vae,
-                            flux_transformer=flux_transformer,
-                            flux_controlnet=flux_controlnet,
+                            flux_transformer=flux_transformer,  # Pass the potentially wrapped transformer
+                            flux_controlnet=flux_controlnet,  # Pass the potentially wrapped controlnet
                             args=args,
                             accelerator=accelerator,
                             weight_dtype=weight_dtype,
                             step=global_step,
                         )
-            logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
+                        flux_controlnet.train()
+                        flux_transformer.train()
+
+            logs = {"step_loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
             progress_bar.set_postfix(**logs)
-            accelerator.log(logs, step=global_step)
 
             if global_step >= args.max_train_steps:
                 break
-    # Create the pipeline using using the trained modules and save it.
+
+    # Create the pipeline using the trained modules and save it.
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
-        flux_controlnet = unwrap_model(flux_controlnet)
-        save_weight_dtype = torch.float32
-        if args.save_weight_dtype == "fp16":
-            save_weight_dtype = torch.float16
-        elif args.save_weight_dtype == "bf16":
-            save_weight_dtype = torch.bfloat16
-        flux_controlnet.to(save_weight_dtype)
-        if args.save_weight_dtype != "fp32":
-            flux_controlnet.save_pretrained(args.output_dir, variant=args.save_weight_dtype)
+        # Save the final model weights
+        if args.use_lora or args.use_ia3:
+            # Save PEFT adapters for ControlNet
+            flux_controlnet_unwrapped = unwrap_model(flux_controlnet)
+            save_lora_weights(flux_controlnet_unwrapped, args.output_dir)
+            print(f"Final: Saved ControlNet PEFT adapters to {args.output_dir}")
+
+            # Save PEFT adapters for Transformer (if it was also adapted)
+            flux_transformer_unwrapped = unwrap_model(flux_transformer)
+            # Use a different filename or subdirectory to distinguish from controlnet adapters
+            save_lora_weights(flux_transformer_unwrapped, args.output_dir, adapter_name="transformer_adapter")
+            print(f"Final: Saved Transformer PEFT adapters to {args.output_dir}")
+
         else:
-            flux_controlnet.save_pretrained(args.output_dir)
+            # Save the full ControlNet model
+            flux_controlnet_unwrapped = unwrap_model(flux_controlnet)
+            if args.save_weight_dtype == "fp16":
+                save_weight_dtype = torch.float16
+            elif args.save_weight_dtype == "bf16":
+                save_weight_dtype = torch.bfloat16
+            else:
+                save_weight_dtype = torch.float32
+
+            flux_controlnet_unwrapped.to(save_weight_dtype)
+            if args.save_weight_dtype != "fp32":
+                flux_controlnet_unwrapped.save_pretrained(args.output_dir, variant=args.save_weight_dtype)
+            else:
+                flux_controlnet_unwrapped.save_pretrained(args.output_dir)
+            print(f"Final: Saved full ControlNet model to {args.output_dir}")
+
         # Run a final round of validation.
-        # Setting `vae`, `unet`, and `controlnet` to None to load automatically from `args.output_dir`.
         image_logs = None
         if args.validation_prompt is not None:
+            # Pass the (potentially PEFT-wrapped) models to log_validation.
+            # The log_validation function will handle unwrapping/loading based on `is_final_validation`.
             image_logs = log_validation(
                 vae=vae,
                 flux_transformer=flux_transformer,
-                flux_controlnet=None,
+                # These are the *original* PEFT-wrapped models if use_lora, or base if not
+                flux_controlnet=flux_controlnet,  # The `is_final_validation=True` path handles loading
                 args=args,
                 accelerator=accelerator,
                 weight_dtype=weight_dtype,
@@ -1525,7 +1589,7 @@ def main(args):
                 repo_id=repo_id,
                 folder_path=args.output_dir,
                 commit_message="End of training",
-                ignore_patterns=["step_*", "epoch_*"],
+                ignore_patterns=["step_*", "epoch_*"],  # Ignore intermediate checkpoints
             )
 
     accelerator.end_training()
