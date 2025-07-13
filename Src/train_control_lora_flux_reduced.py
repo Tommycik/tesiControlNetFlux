@@ -62,8 +62,8 @@ from diffusers.utils.hub_utils import load_or_create_model_card, populate_model_
 from diffusers.utils.import_utils import is_torch_npu_available, is_xformers_available
 from diffusers.utils.torch_utils import is_compiled_module
 
-from peft import LoraConfig
-from peft import get_peft_model
+from peft import LoraConfig, get_peft_model, PeftModel
+
 if is_wandb_available():
     import wandb
 
@@ -1494,10 +1494,6 @@ def main(args):
                 break
     # Create the pipeline using using the trained modules and save it.
     accelerator.wait_for_everyone()
-    if args.use_lora and accelerator.is_main_process:
-        print("✅ Manually saving PEFT model")
-        flux_controlnet.save_pretrained("debug_controlnet_lora")
-
     if accelerator.is_main_process:
 
         accelerator.save_state(args.output_dir)
