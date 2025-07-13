@@ -121,6 +121,8 @@ def log_validation(
             task_type="FEATURE_EXTRACTION",  # can also try "CAUSAL_LM" if this fails
         )
 
+        flux_controlnet.config["model_type"] = "custom_flux_controlnet"
+        flux_transformer.config["model_type"] = "custom_flux_transformer"
         flux_controlnet = get_peft_model(flux_controlnet, lora_config)
         flux_transformer = get_peft_model(flux_transformer, lora_config)
         print("✅ LoRA layers added!")

@@ -107,6 +107,8 @@ def log_validation(
     if args.use_lora:
         print("🔧 Applying LoRA adapters...")
         # Inject LoRA into both modules
+        flux_controlnet.config["model_type"] = "custom_flux_controlnet"
+        flux_transformer.config["model_type"] = "custom_flux_transformer"
         flux_controlnet = get_peft_model(flux_controlnet, lora_config)
         flux_transformer = get_peft_model(flux_transformer, lora_config)
         print("✅ LoRA layers added!")
