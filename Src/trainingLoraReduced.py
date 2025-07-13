@@ -42,7 +42,7 @@ def main():
 
         # LoRA-specific
         "--use_lora",
-        "--lora_rank", "8",
+        "--lora_rank", "4",
         "--lora_alpha", "16",
         "--lora_dropout", "0.05",
 
