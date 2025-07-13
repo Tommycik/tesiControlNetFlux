@@ -1046,6 +1046,14 @@ def main(args):
                 repo_id=args.hub_model_id or Path(args.output_dir).name, exist_ok=True, token=args.hub_token
             ).repo_id
 
+    # Determine weight_dtype from args.mixed_precision
+    if args.mixed_precision == "fp16":
+        weight_dtype = torch.float16
+    elif args.mixed_precision == "bf16":
+        weight_dtype = torch.bfloat16
+    else:
+        weight_dtype = torch.float32
+
     # Setup 4-bit quantization configuration for base models
     quantization_config = BitsAndBytesConfig(
         load_in_4bit=True,
