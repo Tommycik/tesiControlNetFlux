@@ -2,14 +2,14 @@ import os
 from PIL import Image
 import torch
 from huggingface_hub import login
-from diffusers import ControlNetModel, StableDiffusionControlNetPipeline, AutoencoderKL, DDIMScheduler, UNet2DConditionModel
+from diffusers import ControlNetModel, StableDiffusionControlNetPipeline, AutoencoderKL, DDIMScheduler, \
+    UNet2DConditionModel, AutoPipelineForText2Image
 from transformers import AutoTokenizer, AutoModel
-# Import AutoPipelineForText2Image
-from diffusers import AutoPipelineForText2Image
 
 base_controlnet_model = "InstantX/FLUX.1-dev-Controlnet-Canny"
 lora_weights_repo = "tommycik/controlFluxAlcol-LoRAReduced"
 base_flux_model = "black-forest-labs/FLUX.1-dev"
+
 
 def main():
     # Ask for Hugging Face token interactively if needed, or remove if not pushing to hub
@@ -20,7 +20,7 @@ def main():
     # Paths and model identifiers
     base_model_path = "black-forest-labs/FLUX.1-dev"
 
-    # This is the path to your trained Diffusers-style ControlNet LoRA.
+    # This is the path to trained Diffusers-style ControlNet LoRA.
     controlnet_lora_path = "tommycik/controlFluxAlcol-LoRAReduced/controlnet_lora"
 
     # Load the base ControlNet model first
@@ -28,30 +28,25 @@ def main():
     base_controlnet_pretrained_path = 'InstantX/FLUX.1-dev-Controlnet-Canny'
     controlnet = ControlNetModel.from_pretrained(base_controlnet_pretrained_path)
 
-    # Load the base FLUX model using AutoPipelineForText2Image
-    print(f"Loading base FLUX model from {base_model_path} using AutoPipelineForText2Image...")
-    flux_pipeline = AutoPipelineForText2Image.from_pretrained(base_model_path)
+    # Attempt to load the StableDiffusionControlNetPipeline directly
+    # by providing both the base FLUX model and the ControlNet model.
+    # This is the most common way to initialize a ControlNet pipeline.
+    print(
+        f"Loading StableDiffusionControlNetPipeline from base model {base_model_path} and ControlNet {base_controlnet_pretrained_path}...")
 
-    tokenizer = flux_pipeline.tokenizer
-    text_encoder = flux_pipeline.text_encoder
-    unet = flux_pipeline.unet
-    vae = flux_pipeline.vae
-    scheduler = flux_pipeline.scheduler
-
-    # Apply the LoRA weights to the ControlNet model
-    print(f"Loading Diffusers-style LoRA weights from {controlnet_lora_path} into ControlNet...")
-    controlnet.load_lora_weights(controlnet_lora_path)
-
-    # Create the StableDiffusionControlNetPipeline with the LoRA-infused ControlNet
-    print("Creating StableDiffusionControlNetPipeline...")
-    pipe = StableDiffusionControlNetPipeline(
-        vae=vae,
-        text_encoder=text_encoder,
-        tokenizer=tokenizer,
-        unet=unet,
+    #The ControlNet model is passed directly as an argument to from_pretrained,
+    # not extracted from a separate pipeline.
+    pipe = StableDiffusionControlNetPipeline.from_pretrained(
+        base_model_path,
         controlnet=controlnet,
-        scheduler=scheduler,
+        torch_dtype=torch.float16  # Often beneficial for performance, adjust if needed
     )
+
+    # Apply the LoRA weights to the ControlNet model that's now part of the pipe
+    print(f"Loading Diffusers-style LoRA weights from {controlnet_lora_path} into ControlNet...")
+    # Access the controlnet from the loaded pipe instance
+    pipe.controlnet.load_lora_weights(controlnet_lora_path)
+
     pipe.to("cuda")
 
     # Example: Inference
@@ -73,7 +68,7 @@ def main():
 
     output_image = pipe(
         prompt=prompt,
-        image=control_image,  # StableDiffusionControlNetPipeline often uses 'image' for control image
+        image=control_image,
         num_inference_steps=20,
         generator=generator,
         controlnet_conditioning_scale=controlnet_conditioning_scale,
