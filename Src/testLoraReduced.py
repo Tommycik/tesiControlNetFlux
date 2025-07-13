@@ -27,7 +27,7 @@ def main():
     print("Loading tokenizer, text_encoder, unet, vae from base model...")
     tokenizer = AutoTokenizer.from_pretrained(base_model_path, subfolder="tokenizer")
     text_encoder = AutoModel.from_pretrained(base_model_path, subfolder="text_encoder")
-    unet = UniDiffusionPipeline.from_pretrained(base_model_path, subfolder="unet").unet
+    unet = UNet2DConditionModel.from_pretrained(base_model_path, subfolder="unet").unet
     vae = AutoencoderKL.from_pretrained(base_model_path, subfolder="vae")
     scheduler = DDIMScheduler.from_pretrained(base_model_path, subfolder="scheduler")
 
