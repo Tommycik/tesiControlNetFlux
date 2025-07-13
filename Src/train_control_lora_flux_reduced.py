@@ -1494,7 +1494,11 @@ def main(args):
                 break
     # Create the pipeline using using the trained modules and save it.
     accelerator.wait_for_everyone()
+    if args.use_lora and accelerator.is_main_process:
+        print("✅ Manually saving PEFT model")
+        unwrap_model(flux_controlnet).save_pretrained("debug_controlnet_lora")
     if accelerator.is_main_process:
+
         accelerator.save_state(args.output_dir)
         # Run a final round of validation.
         # Setting `vae`, `unet`, and `controlnet` to None to load automatically from `args.output_dir`.
