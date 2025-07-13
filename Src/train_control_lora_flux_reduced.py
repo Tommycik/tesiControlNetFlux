@@ -111,20 +111,36 @@ def log_validation(
 
     #Lora
     if args.use_lora:
-        print("🔧 Applying LoRA adapters...")
-        # Inject LoRA into both modules
-        lora_config = LoraConfig(
+        flux_controlnet.config["model_type"] = "custom_flux"
+        flux_transformer.config["model_type"] = "custom_flux"
+
+        # Define target modules
+        common_target_modules = [
+            "to_q", "to_k", "to_v",
+            "add_q_proj", "add_k_proj", "add_v_proj",
+            "to_out.0", "to_add_out"
+        ]
+
+        # Define LoraConfig
+        lora_config_controlnet = LoraConfig(
             r=args.lora_rank,
             lora_alpha=args.lora_alpha,
             lora_dropout=args.lora_dropout,
             bias="none",
-            task_type="FEATURE_EXTRACTION",  # can also try "CAUSAL_LM" if this fails
+            task_type="FEATURE_EXTRACTION",
+            target_modules=common_target_modules,
         )
 
-        flux_controlnet.config["model_type"] = "custom_flux_controlnet"
-        flux_transformer.config["model_type"] = "custom_flux_transformer"
-        flux_controlnet = get_peft_model(flux_controlnet, lora_config)
-        flux_transformer = get_peft_model(flux_transformer, lora_config)
+        lora_config_transformer = LoraConfig(
+            r=args.lora_rank,
+            lora_alpha=args.lora_alpha,
+            lora_dropout=args.lora_dropout,
+            bias="none",
+            task_type="FEATURE_EXTRACTION",
+            target_modules=common_target_modules,
+        )
+        flux_controlnet = get_peft_model(flux_controlnet, lora_config_controlnet)
+        flux_transformer = get_peft_model(flux_transformer, lora_config_transformer)
         print("✅ LoRA layers added!")
 
     pipeline.to(accelerator.device)
