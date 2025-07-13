@@ -93,12 +93,12 @@ def log_validation(
             args.pretrained_model_name_or_path,
             controlnet=flux_controlnet,
             transformer=flux_transformer,
-            torch_dtype=torch.bfloat16,
+            torch_dtype=weight_dtype,
         )
     else:
         flux_controlnet = FluxControlNetModel.from_pretrained(
             args.output_dir,
-            torch_dtype=torch.bfloat16,
+            torch_dtype=weight_dtype,
             variant=None,  # Disable variant since you're not using fp32.* files
             filename="diffusion_pytorch_model.safetensors",
         )
@@ -106,7 +106,7 @@ def log_validation(
             args.pretrained_model_name_or_path,
             controlnet=flux_controlnet,
             transformer=flux_transformer,
-            torch_dtype=torch.bfloat16,
+            torch_dtype=weight_dtype,
         )
 
     #Lora
@@ -140,7 +140,10 @@ def log_validation(
             target_modules=common_target_modules,
         )
         flux_controlnet = get_peft_model(flux_controlnet, lora_config_controlnet)
+        flux_controlnet.to(accelerator.device, dtype=weight_dtype)
+
         flux_transformer = get_peft_model(flux_transformer, lora_config_transformer)
+        flux_transformer.to(accelerator.device, dtype=weight_dtype)
         print("✅ LoRA layers added!")
 
     pipeline.to(accelerator.device)
