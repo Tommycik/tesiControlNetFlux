@@ -1061,8 +1061,7 @@ def main(args):
         bnb_4bit_compute_dtype=weight_dtype,  # Match your fp16 mixed_precision
         bnb_4bit_use_double_quant=True,  # Enable double quantization for potentially more memory savings
     )
-    # Load the tokenizers
-    # load clip tokenizer
+
     # Load the tokenizers
     # load clip tokenizer
     tokenizer_one = AutoTokenizer.from_pretrained(
@@ -1279,7 +1278,24 @@ def main(args):
 
     # We need to initialize the trackers we use, and also store our configuration.
     # The trackers API can log a dictionary of arguments that is easily accessible from the hub.
-    accelerator.init_trackers(args.tracker_project_name, config=vars(args))
+    # Prepare the configuration for the tracker
+    # Filter out non-serializable arguments before passing them to init_trackers
+    tracker_config = {}
+    for key, value in vars(args).items():
+        if isinstance(value, (int, float, str, bool)):
+            tracker_config[key] = value
+        elif isinstance(value, (list, tuple)):
+            # Convert lists/tuples to a string representation
+            tracker_config[key] = str(value)
+        else:
+            # For any other complex objects, convert them to string
+            try:
+                tracker_config[key] = str(value)
+            except Exception:
+                # Fallback if string conversion fails
+                tracker_config[key] = "Non-serializable object"
+
+    accelerator.init_trackers(args.tracker_project_name, config=tracker_config)
 
     # Train!
     total_batch_size = (
