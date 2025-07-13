@@ -18,7 +18,7 @@ base_flux_model = "black-forest-labs/FLUX.1-dev"
 controlnet = FluxControlNetModel.from_pretrained(base_controlnet_model, torch_dtype=torch.bfloat16)
 
 # Load LoRA weights and merge into base controlnet
-controlnet = PeftModel.from_pretrained(controlnet, lora_weights_repo, torch_dtype=torch.bfloat16)
+controlnet = PeftModel.from_pretrained(PeftModel.from_pretrained(controlnet, lora_weights_repo/"controlnet_lora"))
 
 # Load the pipeline with the adapted ControlNet
 pipe = FluxControlNetPipeline.from_pretrained(base_flux_model, controlnet=controlnet, torch_dtype=torch.bfloat16)

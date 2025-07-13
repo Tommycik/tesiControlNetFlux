@@ -1044,17 +1044,20 @@ def main(args):
                 if args.use_lora:
                     print("💾 Saving LoRA adapters in PEFT format...")
 
-                    # Unwrap accelerator and save LoRA-adapted model
+                    # Save LoRA-adapted ControlNet
                     peft_controlnet = unwrap_model(flux_controlnet)
-                    peft_controlnet.save_pretrained(output_dir)
+                    controlnet_dir = os.path.join(output_dir, "controlnet_lora")
+                    peft_controlnet.save_pretrained(controlnet_dir)
 
-                    # Optionally save the transformer LoRA too
-                    # peft_transformer = unwrap_model(flux_transformer)
-                    # peft_transformer.save_pretrained(os.path.join(output_dir, "transformer_lora"))
+                    # Save LoRA-adapted Transformer
+                    peft_transformer = unwrap_model(flux_transformer)
+                    transformer_dir = os.path.join(output_dir, "transformer_lora")
+                    peft_transformer.save_pretrained(transformer_dir)
 
-                    print("✅ LoRA adapters saved.")
+                    print(f"✅ LoRA adapters saved:\n- {controlnet_dir}\n- {transformer_dir}")
+
                 else:
-                    print("💾 Saving full models...")
+                    print("💾 Saving full models (no LoRA)...")
                     for i, model in enumerate(models):
                         sub_dir = os.path.join(output_dir, f"flux_controlnet_{i}")
                         os.makedirs(sub_dir, exist_ok=True)
