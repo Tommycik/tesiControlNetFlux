@@ -26,17 +26,14 @@ def main():
 
     # Load components
     print("Loading tokenizer, text_encoder, unet, vae from base model...")
-    tokenizer = AutoTokenizer.from_pretrained(base_model_path, subfolder="tokenizer")
-    text_encoder = AutoModel.from_pretrained(base_model_path, subfolder="text_encoder")
-    unet = UNet2DConditionModel.from_pretrained(base_model_path)  # Removed .unet here
+    from diffusers import StableDiffusionPipeline
+    flux_pipeline = StableDiffusionPipeline.from_pretrained(base_model_path)
 
-    vae = AutoencoderKL.from_pretrained(base_model_path, subfolder="vae")
-    scheduler = DDIMScheduler.from_pretrained(base_model_path, subfolder="scheduler")
-
-    # Load the base ControlNet model first
-    print("Loading base ControlNet model...")
-    base_controlnet_pretrained_path = 'InstantX/FLUX.1-dev-Controlnet-Canny'
-    controlnet = ControlNetModel.from_pretrained(base_controlnet_pretrained_path)
+    tokenizer = flux_pipeline.tokenizer
+    text_encoder = flux_pipeline.text_encoder
+    unet = flux_pipeline.unet
+    vae = flux_pipeline.vae
+    scheduler = flux_pipeline.scheduler
 
     # Apply the LoRA weights to the ControlNet model
     print(f"Loading Diffusers-style LoRA weights from {controlnet_lora_path} into ControlNet...")
