@@ -1155,6 +1155,13 @@ def main(args):
     progress_bar = tqdm(range(args.max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
 
+    # Define weight_dtype here, before its first use
+    weight_dtype = torch.float32
+    if accelerator.mixed_precision == "fp16":
+        weight_dtype = torch.float16
+    elif accelerator.mixed_precision == "bf16":
+        weight_dtype = torch.bfloat16
+
     for epoch in range(first_epoch, args.num_train_epochs):
         for step, batch in enumerate(train_dataloader):
             # Skip steps until we reach the resume_step
@@ -1165,12 +1172,15 @@ def main(args):
 
             with accelerator.accumulate(flux_controlnet):
                 # Convert images to latent space
-                latents = vae.encode(batch["pixel_values"].to(vae.device, dtype=weight_dtype)).latent_dist.sample()
+                # Corrected: Use accelerator.device instead of vae.device for input tensors
+                latents = vae.encode(
+                    batch["pixel_values"].to(accelerator.device, dtype=weight_dtype)).latent_dist.sample()
                 latents = latents * vae.config.scaling_factor
 
                 # Convert conditioning images to latent space
+                # Corrected: Use accelerator.device instead of vae.device for input tensors
                 controlnet_conditioning_latents = (
-                    vae.encode(batch["conditioning_pixel_values"].to(vae.device, dtype=weight_dtype))
+                    vae.encode(batch["conditioning_pixel_values"].to(accelerator.device, dtype=weight_dtype))
                     .latent_dist.sample()
                 )
                 controlnet_conditioning_latents = controlnet_conditioning_latents * vae.config.scaling_factor
@@ -1216,12 +1226,6 @@ def main(args):
                     target = noise_scheduler.get_velocity(latents, noise, timesteps)
                 else:
                     raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
-
-                # Call ControlNet to get the output from its conditioned denoising process
-                # Ensure the inputs match what FluxControlNetModel expects.
-                # `controlnet_conditioning_latents` should be the image conditioning input.
-                # The text embeddings (`prompt_ids` and `pooled_prompt_embeds`) are handled
-                # as `encoder_hidden_states` and `added_cond_kwargs` respectively.
 
                 # Pass the noise_scheduler_copy to the controlnet and transformer
                 down_block_res_samples, mid_block_res_sample = flux_controlnet(
