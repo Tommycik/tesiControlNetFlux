@@ -104,6 +104,7 @@ def log_validation(
             torch_dtype=weight_dtype,
         )
     else:
+
         # For final validation, we explicitly load the saved ControlNet model.
         # This ensures we're validating the checkpoint that was saved.
         # If LoRA was used, the saved model in `args.output_dir` would be the LoRA-adapted model (if saved as such)
@@ -1045,6 +1046,15 @@ def main(args):
                 repo_id=args.hub_model_id or Path(args.output_dir).name, exist_ok=True, token=args.hub_token
             ).repo_id
 
+    # Setup 4-bit quantization configuration for base models
+    quantization_config = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",  # Use NF4 quantization
+        bnb_4bit_compute_dtype=weight_dtype,  # Match your fp16 mixed_precision
+        bnb_4bit_use_double_quant=True,  # Enable double quantization for potentially more memory savings
+    )
+    # Load the tokenizers
+    # load clip tokenizer
     # Load the tokenizers
     # load clip tokenizer
     tokenizer_one = AutoTokenizer.from_pretrained(
@@ -1082,6 +1092,9 @@ def main(args):
         subfolder="transformer",
         revision=args.revision,
         variant=None,
+        quantization_config=quantization_config,
+        torch_dtype=weight_dtype,  # load full precision before N4 is used.
+
     )
 
     if args.controlnet_model_name_or_path:

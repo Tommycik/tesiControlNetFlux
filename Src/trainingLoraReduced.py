@@ -25,7 +25,7 @@ def main():
         "--image_column", "image",
         "--caption_column", "prompt",
         "--jsonl_for_train", "./controlnet_dataset/dataset.jsonl",
-        "--resolution", "128",  # ⬅️ reduced from 512
+        "--resolution", "256",  # ⬅️ reduced from 512
         "--learning_rate", "5e-5",
         "--max_train_steps", "2",
         "--checkpointing_steps", "250",
@@ -42,9 +42,9 @@ def main():
 
         # LoRA-specific
         "--use_lora",
-        "--lora_rank", "4",
-        "--lora_alpha", "16",
-        "--lora_dropout", "0.05",
+        "--lora_rank", "8",
+        "--lora_alpha", "32",
+        "--lora_dropout", "0.1",
 
         "--push_to_hub",
         "--hub_model_id", "tommycik/controlFluxAlcol-LoRAReduced"
