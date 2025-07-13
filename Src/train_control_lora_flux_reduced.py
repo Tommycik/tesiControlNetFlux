@@ -196,6 +196,12 @@ def log_validation(
         prompt_embeds, pooled_prompt_embeds, text_ids = pipeline.encode_prompt(
             validation_prompt, prompt_2=validation_prompt
         )
+
+        # Ensure dtype consistency
+        dtype = pipeline.transformer.dtype  # will be bfloat16
+        prompt_embeds = prompt_embeds.to(dtype)
+        pooled_prompt_embeds = pooled_prompt_embeds.to(dtype)
+        text_ids = text_ids.to(dtype)
         for _ in range(args.num_validation_images):
             with autocast_ctx:
                 # need to fix in pipeline_flux_controlnet
