@@ -1022,17 +1022,20 @@ def main(args):
                 if args.use_lora:
                     print("💾 Saving LoRA adapters in PEFT format...")
 
-                    # Unwrap accelerator and save LoRA-adapted model
+                    # Save LoRA-adapted ControlNet
                     peft_controlnet = unwrap_model(flux_controlnet)
-                    peft_controlnet.save_pretrained(output_dir)
+                    controlnet_dir = os.path.join(output_dir, "controlnet_lora")
+                    peft_controlnet.save_pretrained(controlnet_dir)
 
-                    # Optionally save the transformer LoRA too
-                    # peft_transformer = unwrap_model(flux_transformer)
-                    # peft_transformer.save_pretrained(os.path.join(output_dir, "transformer_lora"))
+                    # Save LoRA-adapted Transformer
+                    peft_transformer = unwrap_model(flux_transformer)
+                    transformer_dir = os.path.join(output_dir, "transformer_lora")
+                    peft_transformer.save_pretrained(transformer_dir)
 
-                    print("✅ LoRA adapters saved.")
+                    print(f"✅ LoRA adapters saved:\n- {controlnet_dir}\n- {transformer_dir}")
+
                 else:
-                    print("💾 Saving full models...")
+                    print("💾 Saving full models (no LoRA)...")
                     for i, model in enumerate(models):
                         sub_dir = os.path.join(output_dir, f"flux_controlnet_{i}")
                         os.makedirs(sub_dir, exist_ok=True)
@@ -1471,17 +1474,7 @@ def main(args):
     # Create the pipeline using using the trained modules and save it.
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
-        flux_controlnet = unwrap_model(flux_controlnet)
-        save_weight_dtype = torch.float32
-        if args.save_weight_dtype == "fp16":
-            save_weight_dtype = torch.float16
-        elif args.save_weight_dtype == "bf16":
-            save_weight_dtype = torch.bfloat16
-        flux_controlnet.to(save_weight_dtype)
-        if args.save_weight_dtype != "fp32":
-            flux_controlnet.save_pretrained(args.output_dir, variant=args.save_weight_dtype)
-        else:
-            flux_controlnet.save_pretrained(args.output_dir)
+        accelerator.save_state(args.output_dir)
         # Run a final round of validation.
         # Setting `vae`, `unet`, and `controlnet` to None to load automatically from `args.output_dir`.
         image_logs = None
