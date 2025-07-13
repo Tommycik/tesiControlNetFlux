@@ -157,7 +157,7 @@ def log_validation(
 
         # Uncommenr this line entirely if args.enable_model_cpu_offload is not active.
         #    The offloading mechanism will handle device placement.
-        # pipeline.to(accelerator.device)
+    pipeline.to(accelerator.device)
     pipeline.set_progress_bar_config(disable=True)
 
 
