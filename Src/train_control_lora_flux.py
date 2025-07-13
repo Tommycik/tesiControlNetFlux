@@ -43,7 +43,6 @@ from transformers import (
     AutoTokenizer,
     CLIPTextModel,
     T5EncoderModel,
-    BitsAndBytesConfig,  # Added this line to fix the import error.
 )
 
 import diffusers
@@ -62,6 +61,7 @@ from diffusers.utils.import_utils import is_torch_npu_available, is_xformers_ava
 from diffusers.utils.torch_utils import is_compiled_module
 
 from peft import LoraConfig
+from peft import get_peft_model
 
 if is_wandb_available():
     import wandb
@@ -77,50 +77,40 @@ if is_torch_npu_available():
 
 
 def log_validation(
-        vae, flux_transformer, flux_controlnet, args, accelerator, weight_dtype, step, is_final_validation=False
+    vae, flux_transformer, flux_controlnet, args, accelerator, weight_dtype, step, is_final_validation=False
 ):
     logger.info("Running validation... ")
 
     if not is_final_validation:
         flux_controlnet = accelerator.unwrap_model(flux_controlnet)
-        # Applying LoRA adapters BEFORE pipeline initialization (as suggested previously)
-        if args.use_lora:
-            print("🔧 Applying LoRA adapters to flux_controlnet (validation)...")
-            apply_lora_to_attn(flux_controlnet, args.lora_rank, args.lora_alpha)
-            print("✅ LoRA layers added to flux_controlnet!")
-
         pipeline = FluxControlNetPipeline.from_pretrained(
             args.pretrained_model_name_or_path,
             controlnet=flux_controlnet,
             transformer=flux_transformer,
-            # ✨ Change: Use the consistent weight_dtype for pipeline initialization
-            torch_dtype=weight_dtype,
+            torch_dtype=torch.bfloat16,
         )
     else:
         flux_controlnet = FluxControlNetModel.from_pretrained(
             args.output_dir,
-            # ✨ Change: Use the consistent weight_dtype for pipeline initialization
-            torch_dtype=weight_dtype,
-            variant=None,
+            torch_dtype=torch.bfloat16,
+            variant=None,  # Disable variant since you're not using fp32.* files
             filename="diffusion_pytorch_model.safetensors",
         )
-        # Applying LoRA adapters to newly loaded flux_controlnet
-        if args.use_lora:
-            print("🔧 Applying LoRA adapters to newly loaded flux_controlnet (final validation)...")
-            apply_lora_to_attn(flux_controlnet, args.lora_rank, args.lora_alpha)
-            # Ensure flux_transformer also gets LoRA if it was part of the training with LoRA and is being reloaded/used
-            print("✅ LoRA layers added to newly loaded flux_controlnet!")
-
         pipeline = FluxControlNetPipeline.from_pretrained(
             args.pretrained_model_name_or_path,
             controlnet=flux_controlnet,
             transformer=flux_transformer,
-            # ✨ Change: Use the consistent weight_dtype for pipeline initialization
-            torch_dtype=weight_dtype,
+            torch_dtype=torch.bfloat16,
         )
 
-        # Uncommenr this line entirely if args.enable_model_cpu_offload is not active.
-        #    The offloading mechanism will handle device placement.
+    #Lora
+    if args.use_lora:
+        print("🔧 Applying LoRA adapters...")
+        # Inject LoRA into both modules
+        apply_lora_to_attn(flux_controlnet, args.lora_rank, args.lora_alpha)
+        apply_lora_to_attn(flux_transformer, args.lora_rank, args.lora_alpha)
+        print("✅ LoRA layers added!")
+
     pipeline.to(accelerator.device)
     pipeline.set_progress_bar_config(disable=True)
 
@@ -271,7 +261,7 @@ Please adhere to the licensing terms as described [here](https://huggingface.co/
 
 def parse_args(input_args=None):
     parser = argparse.ArgumentParser(description="Simple example of a ControlNet training script.")
-    # Lora
+    #Lora
     parser.add_argument("--use_lora", action="store_true", help="Enable LoRA training")
     parser.add_argument("--lora_rank", type=int, default=4)
     parser.add_argument("--lora_alpha", type=int, default=32)
@@ -295,7 +285,7 @@ def parse_args(input_args=None):
         type=str,
         default=None,
         help="Path to pretrained controlnet model or model identifier from huggingface.co/models."
-             " If not specified controlnet weights are initialized from unet.",
+        " If not specified controlnet weights are initialized from unet.",
     )
     parser.add_argument(
         "--variant",
@@ -701,11 +691,11 @@ def parse_args(input_args=None):
         raise ValueError("`--validation_prompt` must be set if `--validation_image` is set")
 
     if (
-            args.validation_image is not None
-            and args.validation_prompt is not None
-            and len(args.validation_image) != 1
-            and len(args.validation_prompt) != 1
-            and len(args.validation_image) != len(args.validation_prompt)
+        args.validation_image is not None
+        and args.validation_prompt is not None
+        and len(args.validation_image) != 1
+        and len(args.validation_prompt) != 1
+        and len(args.validation_image) != len(args.validation_prompt)
     ):
         raise ValueError(
             "Must provide either 1 `--validation_image`, 1 `--validation_prompt`,"
@@ -779,6 +769,7 @@ def prepare_train_dataset(dataset, accelerator):
     interpolation = getattr(transforms.InterpolationMode, args.image_interpolation_mode.upper(), None)
     if interpolation is None:
         raise ValueError(f"Unsupported interpolation mode {interpolation=}.")
+
     image_transforms = transforms.Compose(
         [
             transforms.Resize(args.resolution, interpolation=interpolation),
@@ -787,6 +778,7 @@ def prepare_train_dataset(dataset, accelerator):
             transforms.Normalize([0.5], [0.5]),
         ]
     )
+
     conditioning_image_transforms = transforms.Compose(
         [
             transforms.Resize(args.resolution, interpolation=interpolation),
@@ -802,6 +794,7 @@ def prepare_train_dataset(dataset, accelerator):
             for image in examples[args.image_column]
         ]
         images = [image_transforms(image) for image in images]
+
         conditioning_images = [
             (image.convert("RGB") if not isinstance(image, str) else Image.open(image).convert("RGB"))
             for image in examples[args.conditioning_image_column]
@@ -809,21 +802,27 @@ def prepare_train_dataset(dataset, accelerator):
         conditioning_images = [conditioning_image_transforms(image) for image in conditioning_images]
         examples["pixel_values"] = images
         examples["conditioning_pixel_values"] = conditioning_images
+
         return examples
 
     with accelerator.main_process_first():
         dataset = dataset.with_transform(preprocess_train)
+
     return dataset
 
 
 def collate_fn(examples):
     pixel_values = torch.stack([example["pixel_values"] for example in examples])
     pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
+
     conditioning_pixel_values = torch.stack([example["conditioning_pixel_values"] for example in examples])
     conditioning_pixel_values = conditioning_pixel_values.to(memory_format=torch.contiguous_format).float()
+
     prompt_ids = torch.stack([torch.tensor(example["prompt_embeds"]) for example in examples])
+
     pooled_prompt_embeds = torch.stack([torch.tensor(example["pooled_prompt_embeds"]) for example in examples])
     text_ids = torch.stack([torch.tensor(example["text_ids"]) for example in examples])
+
     return {
         "pixel_values": pixel_values,
         "conditioning_pixel_values": conditioning_pixel_values,
@@ -838,6 +837,7 @@ def main(args):
             "You cannot use both --report_to=wandb and --hub_token due to a security risk of exposing your token."
             " Please use `huggingface-cli login` to authenticate with the Hub."
         )
+
     logging_out_dir = Path(args.output_dir, args.logging_dir)
 
     if torch.backends.mps.is_available() and args.mixed_precision == "bf16":
@@ -868,6 +868,7 @@ def main(args):
         level=logging.INFO,
     )
     logger.info(accelerator.state, main_process_only=False)
+
     if accelerator.is_local_main_process:
         transformers.utils.logging.set_verbosity_warning()
         diffusers.utils.logging.set_verbosity_info()
@@ -896,19 +897,16 @@ def main(args):
         subfolder="tokenizer",
         revision=args.revision,
     )
-
     # load t5 tokenizer
     tokenizer_two = AutoTokenizer.from_pretrained(
         args.pretrained_model_name_or_path,
         subfolder="tokenizer_2",
         revision=args.revision,
     )
-
     # load clip text encoder
     text_encoder_one = CLIPTextModel.from_pretrained(
         args.pretrained_model_name_or_path, subfolder="text_encoder", revision=args.revision, variant=args.variant
     )
-
     # load t5 text encoder
     text_encoder_two = T5EncoderModel.from_pretrained(
         args.pretrained_model_name_or_path, subfolder="text_encoder_2", revision=args.revision, variant=args.variant
@@ -920,14 +918,12 @@ def main(args):
         revision=args.revision,
         variant=None,
     )
-
     flux_transformer = FluxTransformer2DModel.from_pretrained(
         args.pretrained_model_name_or_path,
         subfolder="transformer",
         revision=args.revision,
         variant=None,
     )
-
     if args.controlnet_model_name_or_path:
         logger.info("Loading existing controlnet weights")
         flux_controlnet = FluxControlNetModel.from_pretrained(args.controlnet_model_name_or_path)
@@ -941,7 +937,6 @@ def main(args):
             num_layers=args.num_double_layers,
             num_single_layers=args.num_single_layers,
         )
-
     logger.info("all models loaded successfully")
 
     noise_scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(
@@ -949,7 +944,6 @@ def main(args):
         subfolder="scheduler",
     )
     noise_scheduler_copy = copy.deepcopy(noise_scheduler)
-
     vae.requires_grad_(False)
     flux_transformer.requires_grad_(False)
     text_encoder_one.requires_grad_(False)
@@ -967,7 +961,6 @@ def main(args):
         transformer=flux_transformer,
         controlnet=flux_controlnet,
     )
-
     if args.enable_model_cpu_offload:
         flux_controlnet_pipeline.enable_model_cpu_offload()
     else:
@@ -995,72 +988,172 @@ def main(args):
                         sub_dir = os.path.join(output_dir, f"flux_controlnet_{i}")
                         os.makedirs(sub_dir, exist_ok=True)
                         model.save_pretrained(sub_dir)
-                    # i = len(weights) - 1
-                    # while len(weights) > 0:
-                    #    weights.pop()
-                    # model = models[i]
-                    # sub_dir = "flux_controlnet"
-                    # model.save_pretrained(os.path.join(output_dir, sub_dir))
-                    # i -= 1
+                #i = len(weights) - 1
+
+                #while len(weights) > 0:
+                  #  weights.pop()
+                  #  model = models[i]
+
+                  #  sub_dir = "flux_controlnet"
+                    #model.save_pretrained(os.path.join(output_dir, sub_dir))
+
+                    #i -= 1
 
         def load_model_hook(models, input_dir):
             while len(models) > 0:
-                # pop off the last corresponding weight
-                weights.pop()
+                # pop models so that they are not loaded again
+                model = models.pop()
 
-            # Load the main model (assuming flux_controlnet is the primary model to load)
-            load_model = FluxControlNetModel.from_pretrained(input_dir)
-            models.append(load_model)
+                # load diffusers style into model
+                load_model = FluxControlNetModel.from_pretrained(input_dir, subfolder="flux_controlnet")
+                model.register_to_config(**load_model.config)
 
-        accelerator.register_save_state_and_load_state_hooks(save_model_hook, load_model_hook)
+                model.load_state_dict(load_model.state_dict())
+                del load_model
 
+        accelerator.register_save_state_pre_hook(save_model_hook)
+        accelerator.register_load_state_pre_hook(load_model_hook)
+
+    if args.enable_npu_flash_attention:
+        if is_torch_npu_available():
+            logger.info("npu flash attention enabled.")
+            flux_transformer.enable_npu_flash_attention()
+        else:
+            raise ValueError("npu flash attention requires torch_npu extensions and is supported only on npu devices.")
+
+    if args.enable_xformers_memory_efficient_attention:
+        if is_xformers_available():
+            import xformers
+
+            xformers_version = version.parse(xformers.__version__)
+            if xformers_version == version.parse("0.0.16"):
+                logger.warning(
+                    "xFormers 0.0.16 cannot be used for training in some GPUs. If you observe problems during training, please update xFormers to at least 0.0.17. See https://huggingface.co/docs/diffusers/main/en/optimization/xformers for more details."
+                )
+            flux_transformer.enable_xformers_memory_efficient_attention()
+            flux_controlnet.enable_xformers_memory_efficient_attention()
+        else:
+            raise ValueError("xformers is not available. Make sure it is installed correctly")
+
+    if args.gradient_checkpointing:
+        flux_transformer.enable_gradient_checkpointing()
+        flux_controlnet.enable_gradient_checkpointing()
+
+    # Check that all trainable models are in full precision
+    low_precision_error_string = (
+        " Please make sure to always have all model weights in full float32 precision when starting training - even if"
+        " doing mixed precision training, copy of the weights should still be float32."
+    )
+
+    if unwrap_model(flux_controlnet).dtype != torch.float32:
+        raise ValueError(
+            f"Controlnet loaded as datatype {unwrap_model(flux_controlnet).dtype}. {low_precision_error_string}"
+        )
+
+    # Enable TF32 for faster training on Ampere GPUs,
+    # cf https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices
+    if args.allow_tf32:
+        torch.backends.cuda.matmul.allow_tf32 = True
+
+    if args.scale_lr:
+        args.learning_rate = (
+            args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size * accelerator.num_processes
+        )
+
+    # Use 8-bit Adam for lower memory usage or to fine-tune the model in 16GB GPUs
     if args.use_8bit_adam:
         try:
             import bitsandbytes as bnb
         except ImportError:
             raise ImportError(
-                "Please install bitsandbytes to use 8-bit Adam. You can do so by running `pip install bitsandbytes`"
+                "To use 8-bit Adam, please install the bitsandbytes library: `pip install bitsandbytes`."
             )
 
         optimizer_class = bnb.optim.AdamW8bit
-    elif args.use_adafactor:
-        from transformers.optimization import Adafactor
-
-        optimizer_class = Adafactor
     else:
         optimizer_class = torch.optim.AdamW
 
-    # Optimizer parameters
-    # The Flux Transformer and ControlNet require different learning rates.
-    # We will set a slightly lower learning rate for the ControlNet.
-    # Optimizer for ControlNet
-    # Optimizer for Flux Transformer
+    # Optimizer creation
+    params_to_optimize = flux_controlnet.parameters()
+    # use adafactor optimizer to save gpu memory
+    if args.use_adafactor:
+        from transformers import Adafactor
 
-    params_to_optimize = []
-
-    if args.use_lora:
-        # If LoRA is enabled, only optimize the LoRA parameters
-        for param in flux_controlnet.parameters():
-            if param.requires_grad:
-                params_to_optimize.append(param)
-        for param in flux_transformer.parameters():
-            if param.requires_grad:
-                params_to_optimize.append(param)
+        optimizer = Adafactor(
+            params_to_optimize,
+            lr=args.learning_rate,
+            scale_parameter=False,
+            relative_step=False,
+            # warmup_init=True,
+            weight_decay=args.adam_weight_decay,
+        )
     else:
-        # If LoRA is not enabled, optimize the full ControlNet
-        params_to_optimize = list(flux_controlnet.parameters())
+        optimizer = optimizer_class(
+            params_to_optimize,
+            lr=args.learning_rate,
+            betas=(args.adam_beta1, args.adam_beta2),
+            weight_decay=args.adam_weight_decay,
+            eps=args.adam_epsilon,
+        )
 
-    optimizer = optimizer_class(
-        params_to_optimize,
-        lr=args.learning_rate,
-        betas=(args.adam_beta1, args.adam_beta2),
-        weight_decay=args.adam_weight_decay,
-        eps=args.adam_epsilon,
-    )
+    # For mixed precision training we cast the text_encoder and vae weights to half-precision
+    # as these models are only used for inference, keeping weights in full precision is not required.
+    weight_dtype = torch.float32
+    if accelerator.mixed_precision == "fp16":
+        weight_dtype = torch.float16
+    elif accelerator.mixed_precision == "bf16":
+        weight_dtype = torch.bfloat16
 
-    # Dataset and DataLoaders
+    vae.to(accelerator.device, dtype=weight_dtype)
+    flux_transformer.to(accelerator.device, dtype=weight_dtype)
+
+    def compute_embeddings(batch, proportion_empty_prompts, flux_controlnet_pipeline, weight_dtype, is_train=True):
+        prompt_batch = batch[args.caption_column]
+        captions = []
+        for caption in prompt_batch:
+            if random.random() < proportion_empty_prompts:
+                captions.append("")
+            elif isinstance(caption, str):
+                captions.append(caption)
+            elif isinstance(caption, (list, np.ndarray)):
+                # take a random caption if there are multiple
+                captions.append(random.choice(caption) if is_train else caption[0])
+        prompt_batch = captions
+        prompt_embeds, pooled_prompt_embeds, text_ids = flux_controlnet_pipeline.encode_prompt(
+            prompt_batch, prompt_2=prompt_batch
+        )
+        prompt_embeds = prompt_embeds.to(dtype=weight_dtype)
+        pooled_prompt_embeds = pooled_prompt_embeds.to(dtype=weight_dtype)
+        text_ids = text_ids.to(dtype=weight_dtype)
+
+        # text_ids [512,3] to [bs,512,3]
+        text_ids = text_ids.unsqueeze(0).expand(prompt_embeds.shape[0], -1, -1)
+        return {"prompt_embeds": prompt_embeds, "pooled_prompt_embeds": pooled_prompt_embeds, "text_ids": text_ids}
+
     train_dataset = get_train_dataset(args, accelerator)
+    compute_embeddings_fn = functools.partial(
+        compute_embeddings,
+        flux_controlnet_pipeline=flux_controlnet_pipeline,
+        proportion_empty_prompts=args.proportion_empty_prompts,
+        weight_dtype=weight_dtype,
+    )
+    with accelerator.main_process_first():
+        from datasets.fingerprint import Hasher
+
+        # fingerprint used by the cache for the other processes to load the result
+        # details: https://github.com/huggingface/diffusers/pull/4038#discussion_r1266078401
+        new_fingerprint = Hasher.hash(args)
+        train_dataset = train_dataset.map(
+            compute_embeddings_fn, batched=True, new_fingerprint=new_fingerprint, batch_size=50
+        )
+
+    text_encoder_one.to("cpu")
+    text_encoder_two.to("cpu")
+    free_memory()
+
+    # Then get the training dataset ready to be passed to the dataloader.
     train_dataset = prepare_train_dataset(train_dataset, accelerator)
+
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset,
         shuffle=True,
@@ -1070,11 +1163,15 @@ def main(args):
     )
 
     # Scheduler and math around the number of training steps.
-    overrode_max_train_steps = False
-    num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
+    # Check the PR https://github.com/huggingface/diffusers/pull/8312 for detailed explanation.
     if args.max_train_steps is None:
-        args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
-        overrode_max_train_steps = True
+        len_train_dataloader_after_sharding = math.ceil(len(train_dataloader) / accelerator.num_processes)
+        num_update_steps_per_epoch = math.ceil(len_train_dataloader_after_sharding / args.gradient_accumulation_steps)
+        num_training_steps_for_scheduler = (
+            args.num_train_epochs * num_update_steps_per_epoch * accelerator.num_processes
+        )
+    else:
+        num_training_steps_for_scheduler = args.max_train_steps * accelerator.num_processes
 
     lr_scheduler = get_scheduler(
         args.lr_scheduler,
@@ -1084,40 +1181,41 @@ def main(args):
         num_cycles=args.lr_num_cycles,
         power=args.lr_power,
     )
-
-    # Prepare everything with `accelerator`.
-    (
-        flux_controlnet,
-        optimizer,
-        train_dataloader,
-        lr_scheduler,
-    ) = accelerator.prepare(
-        flux_controlnet,
-        optimizer,
-        train_dataloader,
-        lr_scheduler,
+    # Prepare everything with our `accelerator`.
+    flux_controlnet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+        flux_controlnet, optimizer, train_dataloader, lr_scheduler
     )
 
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
-    if overrode_max_train_steps:
+    if args.max_train_steps is None:
         args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
-    # Afterwards we recalculate the number of training epochs
+        if num_training_steps_for_scheduler != args.max_train_steps * accelerator.num_processes:
+            logger.warning(
+                f"The length of the 'train_dataloader' after 'accelerator.prepare' ({len(train_dataloader)}) does not match "
+                f"the expected length ({len_train_dataloader_after_sharding}) when the learning rate scheduler was created. "
+                f"This inconsistency may result in the learning rate scheduler not functioning properly."
+            )
+    # Afterwards we recalculate our number of training epochs
     args.num_train_epochs = math.ceil(args.max_train_steps / num_update_steps_per_epoch)
 
     # We need to initialize the trackers we use, and also store our configuration.
-    # The trackers API can log a dictionary of arguments that is easily accessible from the hub.
-    accelerator.init_trackers(args.tracker_project_name, config=vars(args))
+    # The trackers initializes automatically on the main process.
+    if accelerator.is_main_process:
+        tracker_config = dict(vars(args))
+
+        # tensorboard cannot handle list types for config
+        tracker_config.pop("validation_prompt")
+        tracker_config.pop("validation_image")
+
+        accelerator.init_trackers(args.tracker_project_name, config=tracker_config)
 
     # Train!
-    total_batch_size = (
-            args.train_batch_size
-            * accelerator.num_processes
-            * args.gradient_accumulation_steps
-    )
+    total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
 
     logger.info("***** Running training *****")
     logger.info(f"  Num examples = {len(train_dataset)}")
+    logger.info(f"  Num batches each epoch = {len(train_dataloader)}")
     logger.info(f"  Num Epochs = {args.num_train_epochs}")
     logger.info(f"  Instantaneous batch size per device = {args.train_batch_size}")
     logger.info(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
@@ -1142,131 +1240,142 @@ def main(args):
                 f"Checkpoint '{args.resume_from_checkpoint}' does not exist. Starting a new training run."
             )
             args.resume_from_checkpoint = None
+            initial_global_step = 0
         else:
             accelerator.print(f"Resuming from checkpoint {path}")
             accelerator.load_state(os.path.join(args.output_dir, path))
             global_step = int(path.split("-")[1])
 
-            resume_global_step = global_step * args.gradient_accumulation_steps
-            first_epoch = resume_global_step // num_update_steps_per_epoch
-            resume_step = resume_global_step % num_update_steps_per_epoch
+            initial_global_step = global_step
+            first_epoch = global_step // num_update_steps_per_epoch
+    else:
+        initial_global_step = 0
 
-    # Only show the progress bar once on each machine.
-    progress_bar = tqdm(range(args.max_train_steps), disable=not accelerator.is_local_main_process)
-    progress_bar.set_description("Steps")
+    progress_bar = tqdm(
+        range(0, args.max_train_steps),
+        initial=initial_global_step,
+        desc="Steps",
+        # Only show the progress bar once on each machine.
+        disable=not accelerator.is_local_main_process,
+    )
 
-    # Define weight_dtype here, before its first use
-    weight_dtype = torch.float32
-    if accelerator.mixed_precision == "fp16":
-        weight_dtype = torch.float16
-    elif accelerator.mixed_precision == "bf16":
-        weight_dtype = torch.bfloat16
+    def get_sigmas(timesteps, n_dim=4, dtype=torch.float32):
+        sigmas = noise_scheduler_copy.sigmas.to(device=accelerator.device, dtype=dtype)
+        schedule_timesteps = noise_scheduler_copy.timesteps.to(accelerator.device)
+        timesteps = timesteps.to(accelerator.device)
+        step_indices = [(schedule_timesteps == t).nonzero().item() for t in timesteps]
 
+        sigma = sigmas[step_indices].flatten()
+        while len(sigma.shape) < n_dim:
+            sigma = sigma.unsqueeze(-1)
+        return sigma
+
+    image_logs = None
     for epoch in range(first_epoch, args.num_train_epochs):
         for step, batch in enumerate(train_dataloader):
-            # Skip steps until we reach the resume_step
-            if args.resume_from_checkpoint and epoch == first_epoch and step < resume_step:
-                if step % args.gradient_accumulation_steps == 0:
-                    progress_bar.update(1)
-                continue
-
             with accelerator.accumulate(flux_controlnet):
                 # Convert images to latent space
-                # Corrected: Use accelerator.device instead of vae.device for input tensors
-                latents = vae.encode(
-                    batch["pixel_values"].to(accelerator.device, dtype=weight_dtype)).latent_dist.sample()
-                latents = latents * vae.config.scaling_factor
-
-                # Convert conditioning images to latent space
-                # Corrected: Use accelerator.device instead of vae.device for input tensors
-                controlnet_conditioning_latents = (
-                    vae.encode(batch["conditioning_pixel_values"].to(accelerator.device, dtype=weight_dtype))
-                    .latent_dist.sample()
+                # vae encode
+                pixel_values = batch["pixel_values"].to(dtype=weight_dtype)
+                pixel_latents_tmp = vae.encode(pixel_values).latent_dist.sample()
+                pixel_latents_tmp = (pixel_latents_tmp - vae.config.shift_factor) * vae.config.scaling_factor
+                pixel_latents = FluxControlNetPipeline._pack_latents(
+                    pixel_latents_tmp,
+                    pixel_values.shape[0],
+                    pixel_latents_tmp.shape[1],
+                    pixel_latents_tmp.shape[2],
+                    pixel_latents_tmp.shape[3],
                 )
-                controlnet_conditioning_latents = controlnet_conditioning_latents * vae.config.scaling_factor
 
-                # Sample noise that we'll add to the latents
-                noise = torch.randn_like(latents)
-                bsz = latents.shape[0]
+                control_values = batch["conditioning_pixel_values"].to(dtype=weight_dtype)
+                control_latents = vae.encode(control_values).latent_dist.sample()
+                control_latents = (control_latents - vae.config.shift_factor) * vae.config.scaling_factor
+                control_image = FluxControlNetPipeline._pack_latents(
+                    control_latents,
+                    control_values.shape[0],
+                    control_latents.shape[1],
+                    control_latents.shape[2],
+                    control_latents.shape[3],
+                )
 
+                latent_image_ids = FluxControlNetPipeline._prepare_latent_image_ids(
+                    batch_size=pixel_latents_tmp.shape[0],
+                    height=pixel_latents_tmp.shape[2] // 2,
+                    width=pixel_latents_tmp.shape[3] // 2,
+                    device=pixel_values.device,
+                    dtype=pixel_values.dtype,
+                )
+
+                bsz = pixel_latents.shape[0]
+                noise = torch.randn_like(pixel_latents).to(accelerator.device).to(dtype=weight_dtype)
                 # Sample a random timestep for each image
-                timesteps = torch.randint(
-                    0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device
+                # for weighting schemes where we sample timesteps non-uniformly
+                u = compute_density_for_timestep_sampling(
+                    weighting_scheme=args.weighting_scheme,
+                    batch_size=bsz,
+                    logit_mean=args.logit_mean,
+                    logit_std=args.logit_std,
+                    mode_scale=args.mode_scale,
                 )
-                timesteps = timesteps.long()
+                indices = (u * noise_scheduler_copy.config.num_train_timesteps).long()
+                timesteps = noise_scheduler_copy.timesteps[indices].to(device=pixel_latents.device)
 
-                # Add noise to the latents according to the noise magnitude at each timestep
-                # (this is the forward diffusion process)
-                noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
+                # Add noise according to flow matching.
+                sigmas = get_sigmas(timesteps, n_dim=pixel_latents.ndim, dtype=pixel_latents.dtype)
+                noisy_model_input = (1.0 - sigmas) * pixel_latents + sigmas * noise
 
-                # Get the text embedding for conditioning
-                # text_encoder_one = unwrap_model(text_encoder_one)
-                # text_encoder_two = unwrap_model(text_encoder_two)
-
-                # Get the additional image embedding for conditioning
-                # Currently, FluxControlNetModel does not accept `text_encoder_hidden_states` as input.
-                # However, it expects a combined 'encoder_hidden_states' derived from the prompt embeddings and
-                # `pooled_prompt_embeds`.
-                # Assuming `batch["prompt_ids"]` and `batch["unet_added_conditions"]["pooled_prompt_embeds"]`
-                # are correctly prepared by the `collate_fn` to form the necessary conditioning inputs.
-
-                # Predict the noise residual
-                # controlnet_pred_noise = flux_controlnet(
-                #     noisy_latents,
-                #     timesteps,
-                #     encoder_hidden_states=batch["prompt_ids"], # Assuming prompt_ids are used as encoder_hidden_states
-                #     added_cond_kwargs=batch["unet_added_conditions"],
-                #     controlnet_cond=controlnet_conditioning_latents, # This might be the conditioning input for ControlNet
-                # ).sample
-
-                # Get the target for loss depending on the prediction type
-                if noise_scheduler.config.prediction_type == "epsilon":
-                    target = noise
-                elif noise_scheduler.config.prediction_type == "v_prediction":
-                    target = noise_scheduler.get_velocity(latents, noise, timesteps)
+                # handle guidance
+                if flux_transformer.config.guidance_embeds:
+                    guidance_vec = torch.full(
+                        (noisy_model_input.shape[0],),
+                        args.guidance_scale,
+                        device=noisy_model_input.device,
+                        dtype=weight_dtype,
+                    )
                 else:
-                    raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
+                    guidance_vec = None
 
-                # Pass the noise_scheduler_copy to the controlnet and transformer
-                down_block_res_samples, mid_block_res_sample = flux_controlnet(
-                    noisy_latents,
-                    timesteps,
-                    encoder_hidden_states=batch["prompt_ids"],
-                    added_cond_kwargs=batch["unet_added_conditions"],
-                    controlnet_cond=controlnet_conditioning_latents,
+                controlnet_block_samples, controlnet_single_block_samples = flux_controlnet(
+                    hidden_states=noisy_model_input,
+                    controlnet_cond=control_image,
+                    timestep=timesteps / 1000,
+                    guidance=guidance_vec,
+                    pooled_projections=batch["unet_added_conditions"]["pooled_prompt_embeds"].to(dtype=weight_dtype),
+                    encoder_hidden_states=batch["prompt_ids"].to(dtype=weight_dtype),
+                    txt_ids=batch["unet_added_conditions"]["time_ids"][0].to(dtype=weight_dtype),
+                    img_ids=latent_image_ids,
                     return_dict=False,
                 )
 
-                model_pred = flux_transformer(
-                    noisy_latents,
-                    timesteps,
-                    encoder_hidden_states=batch["prompt_ids"],
-                    added_cond_kwargs=batch["unet_added_conditions"],
-                    down_block_additional_residuals=down_block_res_samples,
-                    mid_block_additional_residual=mid_block_res_sample,
-                ).sample
+                noise_pred = flux_transformer(
+                    hidden_states=noisy_model_input,
+                    timestep=timesteps / 1000,
+                    guidance=guidance_vec,
+                    pooled_projections=batch["unet_added_conditions"]["pooled_prompt_embeds"].to(dtype=weight_dtype),
+                    encoder_hidden_states=batch["prompt_ids"].to(dtype=weight_dtype),
+                    controlnet_block_samples=[sample.to(dtype=weight_dtype) for sample in controlnet_block_samples]
+                    if controlnet_block_samples is not None
+                    else None,
+                    controlnet_single_block_samples=[
+                        sample.to(dtype=weight_dtype) for sample in controlnet_single_block_samples
+                    ]
+                    if controlnet_single_block_samples is not None
+                    else None,
+                    txt_ids=batch["unet_added_conditions"]["time_ids"][0].to(dtype=weight_dtype),
+                    img_ids=latent_image_ids,
+                    return_dict=False,
+                )[0]
 
-                # Calculate loss
-                if args.weighting_scheme == "none":
-                    loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-                elif args.weighting_scheme == "sigma_sqrt":
-                    weight = noise_scheduler_copy.get_scalings_for_boundary_conditions(timesteps)[0] ** 2
-                    loss = (weight * F.mse_loss(model_pred.float(), target.float(), reduction="none")).mean()
-                elif args.weighting_scheme == "logit_normal":
-                    w = compute_density_for_timestep_sampling(
-                        noise_scheduler_copy, timesteps, args.logit_mean, args.logit_std
-                    )
-                    loss = w * F.mse_loss(model_pred.float(), target.float(), reduction="none").mean()
-                elif args.weighting_scheme == "mode":
-                    sigma = noise_scheduler_copy.sigmas[timesteps.cpu()].to(timesteps.device)
-                    w = 1 / (sigma ** 2 + args.mode_scale ** 2)
-                    loss = w * F.mse_loss(model_pred.float(), target.float(), reduction="none").mean()
-                else:
-                    raise ValueError("Unknown weighting scheme")
-
+                loss = F.mse_loss(noise_pred.float(), (noise - pixel_latents).float(), reduction="mean")
                 accelerator.backward(loss)
+                # Check if the gradient of each model parameter contains NaN
+                for name, param in flux_controlnet.named_parameters():
+                    if param.grad is not None and torch.isnan(param.grad).any():
+                        logger.error(f"Gradient for {name} contains NaN!")
+
                 if accelerator.sync_gradients:
-                    accelerator.clip_grad_norm_(params_to_optimize, args.max_grad_norm)
+                    params_to_clip = flux_controlnet.parameters()
+                    accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
                 optimizer.step()
                 lr_scheduler.step()
                 optimizer.zero_grad(set_to_none=args.set_grads_to_none)
@@ -1275,17 +1384,35 @@ def main(args):
             if accelerator.sync_gradients:
                 progress_bar.update(1)
                 global_step += 1
-                accelerator.log({"train_loss": loss.item()}, step=global_step)
 
-                if global_step % args.checkpointing_steps == 0:
-                    if accelerator.is_main_process:
-                        # _before_ saving we should save a checkpoint with accelerator.save
+                # DeepSpeed requires saving weights on every device; saving weights only on the main process would cause issues.
+                if accelerator.distributed_type == DistributedType.DEEPSPEED or accelerator.is_main_process:
+                    if global_step % args.checkpointing_steps == 0:
+                        # _before_ saving state, check if this save would set us over the `checkpoints_total_limit`
+                        if args.checkpoints_total_limit is not None:
+                            checkpoints = os.listdir(args.output_dir)
+                            checkpoints = [d for d in checkpoints if d.startswith("checkpoint")]
+                            checkpoints = sorted(checkpoints, key=lambda x: int(x.split("-")[1]))
+
+                            # before we save the new checkpoint, we need to have at _most_ `checkpoints_total_limit - 1` checkpoints
+                            if len(checkpoints) >= args.checkpoints_total_limit:
+                                num_to_remove = len(checkpoints) - args.checkpoints_total_limit + 1
+                                removing_checkpoints = checkpoints[0:num_to_remove]
+
+                                logger.info(
+                                    f"{len(checkpoints)} checkpoints already exist, removing {len(removing_checkpoints)} checkpoints"
+                                )
+                                logger.info(f"removing checkpoints: {', '.join(removing_checkpoints)}")
+
+                                for removing_checkpoint in removing_checkpoints:
+                                    removing_checkpoint = os.path.join(args.output_dir, removing_checkpoint)
+                                    shutil.rmtree(removing_checkpoint)
+
                         save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
                         accelerator.save_state(save_path)
                         logger.info(f"Saved state to {save_path}")
 
-                if global_step % args.validation_steps == 0:
-                    if accelerator.is_main_process:
+                    if args.validation_prompt is not None and global_step % args.validation_steps == 0:
                         image_logs = log_validation(
                             vae=vae,
                             flux_transformer=flux_transformer,
@@ -1295,29 +1422,26 @@ def main(args):
                             weight_dtype=weight_dtype,
                             step=global_step,
                         )
-
-            logs = {"step_loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
+            logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
             progress_bar.set_postfix(**logs)
+            accelerator.log(logs, step=global_step)
 
             if global_step >= args.max_train_steps:
                 break
-
-    # Create the pipeline using the trained modules and save it.
+    # Create the pipeline using using the trained modules and save it.
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
-        # Check if the accelerator has performed an optimization step behind the scenes
-        if global_step % args.checkpointing_steps != 0 and args.save_weight_dtype == "fp32":
-            # Save the final model
-            # For Flux ControlNet, we only save the ControlNet itself.
-            if args.save_weight_dtype == "fp16":
-                save_weight_dtype = torch.float16
-            elif args.save_weight_dtype == "bf16":
-                save_weight_dtype = torch.bfloat16
-            flux_controlnet.to(save_weight_dtype)
-            if args.save_weight_dtype != "fp32":
-                flux_controlnet.save_pretrained(args.output_dir, variant=args.save_weight_dtype)
-            else:
-                flux_controlnet.save_pretrained(args.output_dir)
+        flux_controlnet = unwrap_model(flux_controlnet)
+        save_weight_dtype = torch.float32
+        if args.save_weight_dtype == "fp16":
+            save_weight_dtype = torch.float16
+        elif args.save_weight_dtype == "bf16":
+            save_weight_dtype = torch.bfloat16
+        flux_controlnet.to(save_weight_dtype)
+        if args.save_weight_dtype != "fp32":
+            flux_controlnet.save_pretrained(args.output_dir, variant=args.save_weight_dtype)
+        else:
+            flux_controlnet.save_pretrained(args.output_dir)
         # Run a final round of validation.
         # Setting `vae`, `unet`, and `controlnet` to None to load automatically from `args.output_dir`.
         image_logs = None
@@ -1345,7 +1469,7 @@ def main(args):
                 repo_id=repo_id,
                 folder_path=args.output_dir,
                 commit_message="End of training",
-                ignore_patterns=["*.pt", ".*", "*.safetensors", "__pycache__"],
+                ignore_patterns=["step_*", "epoch_*"],
             )
 
     accelerator.end_training()

@@ -44,7 +44,7 @@ from transformers import (
     AutoTokenizer,
     CLIPTextModel,
     T5EncoderModel,
-    BitsAndBytesConfig,  #  line for N4 quantization
+    BitsAndBytesConfig,
 )
 
 import diffusers
@@ -62,47 +62,12 @@ from diffusers.utils.hub_utils import load_or_create_model_card, populate_model_
 from diffusers.utils.import_utils import is_torch_npu_available, is_xformers_available
 from diffusers.utils.torch_utils import is_compiled_module
 
-from peft import LoraConfig, get_peft_model, IA3Config
-
+from peft import LoraConfig
+from peft import get_peft_model
 if is_wandb_available():
     import wandb
 
 import torch.nn as nn
-
-
-#lora utility
-class LoRAAttnProcessor(nn.Module):
-    def __init__(self, hidden_size, rank=4, alpha=32):
-        super().__init__()
-        self.rank = rank
-        self.lora_A = nn.Linear(hidden_size, rank, bias=False)
-        self.lora_B = nn.Linear(rank, hidden_size, bias=False)
-        self.scaling = alpha / rank
-
-    def forward(self, x):
-        return self.lora_B(self.lora_A(x)) * self.scaling
-
-
-def apply_lora_to_attn(module, rank=4, alpha=32):
-    for name, child in module.named_children():
-        # Only inject into actual attention projection layers (e.g., q, k, v, out proj)
-        if isinstance(child, nn.Linear) and "attn" in name.lower():
-            try:
-                hidden_size = child.in_features
-                lora_layer = LoRAAttnProcessor(hidden_size, rank=rank, alpha=alpha)
-                print(f"✅ Injecting LoRA into: {name} ({type(child)})")
-                # Replace the linear layer with a sequential block including LoRA
-                setattr(module, name, nn.Sequential(child, lora_layer))
-            except Exception as e:
-                print(f"⚠️ Skipping {name} due to injection error: {e}")
-        else:
-            # Recursively apply to child modules
-            apply_lora_to_attn(child, rank, alpha)
-
-
-def save_lora_weights(model, path):
-    lora_weights = {k: v for k, v in model.state_dict().items() if 'lora' in k.lower()}
-    torch.save(lora_weights, os.path.join(path, "lora_weights.pt"))
 
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
@@ -148,8 +113,16 @@ def log_validation(
     if args.use_lora:
         print("🔧 Applying LoRA adapters...")
         # Inject LoRA into both modules
-        apply_lora_to_attn(flux_controlnet, args.lora_rank, args.lora_alpha)
-        apply_lora_to_attn(flux_transformer, args.lora_rank, args.lora_alpha)
+        lora_config = LoraConfig(
+            r=args.lora_rank,
+            lora_alpha=args.lora_alpha,
+            lora_dropout=args.lora_dropout,
+            bias="none",
+            task_type="FEATURE_EXTRACTION",  # can also try "CAUSAL_LM" if this fails
+        )
+
+        flux_controlnet = get_peft_model(flux_controlnet, lora_config)
+        flux_transformer = get_peft_model(flux_transformer, lora_config)
         print("✅ LoRA layers added!")
 
     pipeline.to(accelerator.device)
@@ -196,12 +169,6 @@ def log_validation(
         prompt_embeds, pooled_prompt_embeds, text_ids = pipeline.encode_prompt(
             validation_prompt, prompt_2=validation_prompt
         )
-
-        # Ensure dtype consistency
-        dtype = pipeline.transformer.dtype  # will be bfloat16
-        prompt_embeds = prompt_embeds.to(dtype)
-        pooled_prompt_embeds = pooled_prompt_embeds.to(dtype)
-        text_ids = text_ids.to(dtype)
         for _ in range(args.num_validation_images):
             with autocast_ctx:
                 # need to fix in pipeline_flux_controlnet
@@ -1039,28 +1006,27 @@ def main(args):
         # create custom saving & loading hooks so that `accelerator.save_state(...)` serializes in a nice format
         def save_model_hook(models, weights, output_dir):
             if accelerator.is_main_process:
-                # Save LoRA weights or full model depending on args.use_lora
+                os.makedirs(output_dir, exist_ok=True)
+
                 if args.use_lora:
-                    os.makedirs(output_dir, exist_ok=True)
-                    save_lora_weights(flux_controlnet, output_dir)
-                    save_lora_weights(flux_transformer, output_dir)
-                    print("Saved only LoRA weights.")
+                    print("💾 Saving LoRA adapters in PEFT format...")
+
+                    # Unwrap accelerator and save LoRA-adapted model
+                    peft_controlnet = unwrap_model(flux_controlnet)
+                    peft_controlnet.save_pretrained(output_dir)
+
+                    # Optionally save the transformer LoRA too
+                    # peft_transformer = unwrap_model(flux_transformer)
+                    # peft_transformer.save_pretrained(os.path.join(output_dir, "transformer_lora"))
+
+                    print("✅ LoRA adapters saved.")
                 else:
-                    # Save each model in models list to a subdirectory
+                    print("💾 Saving full models...")
                     for i, model in enumerate(models):
                         sub_dir = os.path.join(output_dir, f"flux_controlnet_{i}")
                         os.makedirs(sub_dir, exist_ok=True)
                         model.save_pretrained(sub_dir)
-                #i = len(weights) - 1
-
-                #while len(weights) > 0:
-                #  weights.pop()
-                #  model = models[i]
-
-                #  sub_dir = "flux_controlnet"
-                #model.save_pretrained(os.path.join(output_dir, sub_dir))
-
-                #i -= 1
+                    print("✅ Full models saved.")
 
         def load_model_hook(models, input_dir):
             while len(models) > 0:
