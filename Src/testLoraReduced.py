@@ -28,7 +28,7 @@ def main():
     print("Loading tokenizer, text_encoder, unet, vae from base model...")
     tokenizer = AutoTokenizer.from_pretrained(base_model_path, subfolder="tokenizer")
     text_encoder = AutoModel.from_pretrained(base_model_path, subfolder="text_encoder")
-    unet = UNet2DConditionModel.from_pretrained(base_model_path, subfolder="unet").unet
+    unet = UNet2DConditionModel.from_pretrained(base_model_path).unet
     vae = AutoencoderKL.from_pretrained(base_model_path, subfolder="vae")
     scheduler = DDIMScheduler.from_pretrained(base_model_path, subfolder="scheduler")
 
@@ -43,7 +43,14 @@ def main():
 
     # Create the StableDiffusionControlNetPipeline with the LoRA-infused ControlNet
     print("Creating StableDiffusionControlNetPipeline...")
-    pipe = FluxControlNetPipeline.from_pretrained(base_flux_model, controlnet=controlnet, torch_dtype=torch.bfloat16)  #
+    pipe = StableDiffusionControlNetPipeline(
+        vae=vae,
+        text_encoder=text_encoder,
+        tokenizer=tokenizer,
+        unet=unet,
+        controlnet=controlnet,  #
+        scheduler=scheduler,
+    )
     pipe.to("cuda")
 
     # Example: Inference
