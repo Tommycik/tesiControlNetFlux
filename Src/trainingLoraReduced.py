@@ -14,7 +14,7 @@ def main():
     pretrained_model = "black-forest-labs/FLUX.1-dev"
     controlnet_pretrained = 'InstantX/FLUX.1-dev-Controlnet-Canny'
     training_script = "train_control_lora_flux_reduced.py"
-
+    
     # Accelerate training command with LoRA-specific args
     command = [
         "accelerate", "launch", training_script,
