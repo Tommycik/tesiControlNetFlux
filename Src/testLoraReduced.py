@@ -1,12 +1,11 @@
-
-# Base and LoRA models on HF Hub
-from huggingface_hub import login
-from diffusers import ControlNetModel, StableDiffusionControlNetPipeline, AutoencoderKL, DDIMScheduler
-from diffusers import UNet2DConditionModel
-from transformers import AutoTokenizer, AutoModel
-import torch
 import os
 from PIL import Image
+import torch
+from huggingface_hub import login
+from diffusers import ControlNetModel, StableDiffusionControlNetPipeline, AutoencoderKL, DDIMScheduler, UNet2DConditionModel
+from transformers import AutoTokenizer, AutoModel
+# Import AutoPipelineForText2Image
+from diffusers import AutoPipelineForText2Image
 
 base_controlnet_model = "InstantX/FLUX.1-dev-Controlnet-Canny"
 lora_weights_repo = "tommycik/controlFluxAlcol-LoRAReduced"
@@ -24,10 +23,14 @@ def main():
     # This is the path to your trained Diffusers-style ControlNet LoRA.
     controlnet_lora_path = "tommycik/controlFluxAlcol-LoRAReduced/controlnet_lora"
 
-    # Load components
-    print("Loading tokenizer, text_encoder, unet, vae from base model...")
-    from diffusers import StableDiffusionPipeline
-    flux_pipeline = StableDiffusionPipeline.from_pretrained(base_model_path)
+    # Load the base ControlNet model first
+    print("Loading base ControlNet model...")
+    base_controlnet_pretrained_path = 'InstantX/FLUX.1-dev-Controlnet-Canny'
+    controlnet = ControlNetModel.from_pretrained(base_controlnet_pretrained_path)
+
+    # Load the base FLUX model using AutoPipelineForText2Image
+    print(f"Loading base FLUX model from {base_model_path} using AutoPipelineForText2Image...")
+    flux_pipeline = AutoPipelineForText2Image.from_pretrained(base_model_path)
 
     tokenizer = flux_pipeline.tokenizer
     text_encoder = flux_pipeline.text_encoder
