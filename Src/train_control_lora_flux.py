@@ -942,6 +942,17 @@ def main(args):
         )
     logger.info("all models loaded successfully")
 
+    print("🔍 Linear layers in flux_controlnet:")
+    for name, module in flux_controlnet.named_modules():
+        if isinstance(module, torch.nn.Linear):
+            print(name)
+
+    print("/n next")
+    print("🔍 Linear layers in flux_controlnet:")
+    for name, module in flux_transformer.named_modules():
+        if isinstance(module, torch.nn.Linear):
+            print(name)
+
     noise_scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(
         args.pretrained_model_name_or_path,
         subfolder="scheduler",
