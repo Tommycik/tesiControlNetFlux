@@ -37,7 +37,7 @@ def main():
         "--gradient_accumulation_steps", "1",  # ⬅️ to maintain effective batch
         "--gradient_checkpointing",
         "--use_8bit_adam",
-        #"--enable_model_cpu_offload",
+        "--enable_model_cpu_offload",
         "--set_grads_to_none",
 
         # LoRA-specific
