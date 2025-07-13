@@ -24,14 +24,14 @@ def main():
         "--jsonl_for_train", "./controlnet_dataset/dataset.jsonl",
         "--resolution", "512",
         "--learning_rate", "1e-4",  # LoRA can use a slightly higher LR
-        "--max_train_steps", "1000",
+        "--max_train_steps", "2",
         "--checkpointing_steps", "250",
         "--validation_steps", "125",
         "--mixed_precision", "bf16",
         "--validation_image", "controlnet_dataset/images/sample_0000.jpg",
         "--validation_prompt", "transparent glass on white background, the bottom part of the glass presents light grooves",
-        "--train_batch_size", "2",#for speed,if 8 and 1 gradient needs more than 80 gb of ram(79 + 144 mb)
-        "--gradient_accumulation_steps", "4",
+        "--train_batch_size", "1",#for speed,if 8 and 1 gradient needs more than 80 gb of ram(79 + 144 mb)
+        "--gradient_accumulation_steps", "1",
         "--gradient_checkpointing",#if not it goes out of memory if train batch >2
         #"--enable_model_cpu_offload",
         "--use_8bit_adam",
