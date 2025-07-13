@@ -2,6 +2,7 @@
 # Base and LoRA models on HF Hub
 from huggingface_hub import login
 from diffusers import ControlNetModel, StableDiffusionControlNetPipeline, AutoencoderKL, DDIMScheduler
+from diffusers import UNet2DConditionModel
 from transformers import AutoTokenizer, AutoModel
 import torch
 import os
