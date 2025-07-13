@@ -107,9 +107,10 @@ def log_validation(
     if args.use_lora:
         print("🔧 Applying LoRA adapters...")
         # Inject LoRA into both modules
-        apply_lora_to_attn(flux_controlnet, args.lora_rank, args.lora_alpha)
-        apply_lora_to_attn(flux_transformer, args.lora_rank, args.lora_alpha)
+        flux_controlnet = get_peft_model(flux_controlnet, lora_config)
+        flux_transformer = get_peft_model(flux_transformer, lora_config)
         print("✅ LoRA layers added!")
+
 
     pipeline.to(accelerator.device)
     pipeline.set_progress_bar_config(disable=True)
@@ -976,28 +977,27 @@ def main(args):
         # create custom saving & loading hooks so that `accelerator.save_state(...)` serializes in a nice format
         def save_model_hook(models, weights, output_dir):
             if accelerator.is_main_process:
-                # Save LoRA weights or full model depending on args.use_lora
+                os.makedirs(output_dir, exist_ok=True)
+
                 if args.use_lora:
-                    os.makedirs(output_dir, exist_ok=True)
-                    save_lora_weights(flux_controlnet, output_dir)
-                    save_lora_weights(flux_transformer, output_dir)
-                    print("Saved only LoRA weights.")
+                    print("💾 Saving LoRA adapters in PEFT format...")
+
+                    # Unwrap accelerator and save LoRA-adapted model
+                    peft_controlnet = unwrap_model(flux_controlnet)
+                    peft_controlnet.save_pretrained(output_dir)
+
+                    # Optionally save the transformer LoRA too
+                    # peft_transformer = unwrap_model(flux_transformer)
+                    # peft_transformer.save_pretrained(os.path.join(output_dir, "transformer_lora"))
+
+                    print("✅ LoRA adapters saved.")
                 else:
-                    # Save each model in models list to a subdirectory
+                    print("💾 Saving full models...")
                     for i, model in enumerate(models):
                         sub_dir = os.path.join(output_dir, f"flux_controlnet_{i}")
                         os.makedirs(sub_dir, exist_ok=True)
                         model.save_pretrained(sub_dir)
-                #i = len(weights) - 1
-
-                #while len(weights) > 0:
-                  #  weights.pop()
-                  #  model = models[i]
-
-                  #  sub_dir = "flux_controlnet"
-                    #model.save_pretrained(os.path.join(output_dir, sub_dir))
-
-                    #i -= 1
+                    print("✅ Full models saved.")
 
         def load_model_hook(models, input_dir):
             while len(models) > 0:
