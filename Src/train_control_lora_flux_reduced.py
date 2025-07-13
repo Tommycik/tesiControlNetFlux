@@ -1496,7 +1496,8 @@ def main(args):
     accelerator.wait_for_everyone()
     if args.use_lora and accelerator.is_main_process:
         print("✅ Manually saving PEFT model")
-        unwrap_model(flux_controlnet).save_pretrained("debug_controlnet_lora")
+        flux_controlnet.save_pretrained("debug_controlnet_lora")
+
     if accelerator.is_main_process:
 
         accelerator.save_state(args.output_dir)
