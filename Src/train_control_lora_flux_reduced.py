@@ -1075,7 +1075,6 @@ def main(args):
 
                 model.load_state_dict(load_model.state_dict())
                 del load_model
-
         accelerator.register_save_state_pre_hook(save_model_hook)
         accelerator.register_load_state_pre_hook(load_model_hook)
 
@@ -1495,18 +1494,7 @@ def main(args):
                 break
     # Create the pipeline using using the trained modules and save it.
     accelerator.wait_for_everyone()
-    if accelerator.is_main_process:
-        flux_controlnet = unwrap_model(flux_controlnet)
-        save_weight_dtype = torch.float32
-        if args.save_weight_dtype == "fp16":
-            save_weight_dtype = torch.float16
-        elif args.save_weight_dtype == "bf16":
-            save_weight_dtype = torch.bfloat16
-        flux_controlnet.to(save_weight_dtype)
-        if args.save_weight_dtype != "fp32":
-            flux_controlnet.save_pretrained(args.output_dir, variant=args.save_weight_dtype)
-        else:
-            flux_controlnet.save_pretrained(args.output_dir)
+    accelerator.save_state(args.output_dir)
         # Run a final round of validation.
         # Setting `vae`, `unet`, and `controlnet` to None to load automatically from `args.output_dir`.
         image_logs = None
