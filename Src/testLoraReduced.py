@@ -28,8 +28,8 @@ def main():
     print("Loading tokenizer, text_encoder, unet, vae from base model...")
     tokenizer = AutoTokenizer.from_pretrained(base_model_path, subfolder="tokenizer")
     text_encoder = AutoModel.from_pretrained(base_model_path, subfolder="text_encoder")
-    pipe_components = StableDiffusionControlNetPipeline.from_pretrained(base_model_path)
-    unet = pipe_components.unet
+    unet = UNet2DConditionModel.from_pretrained(base_model_path)  # Removed .unet here
+
     vae = AutoencoderKL.from_pretrained(base_model_path, subfolder="vae")
     scheduler = DDIMScheduler.from_pretrained(base_model_path, subfolder="scheduler")
 
@@ -49,7 +49,7 @@ def main():
         text_encoder=text_encoder,
         tokenizer=tokenizer,
         unet=unet,
-        controlnet=controlnet,  #
+        controlnet=controlnet,
         scheduler=scheduler,
     )
     pipe.to("cuda")
