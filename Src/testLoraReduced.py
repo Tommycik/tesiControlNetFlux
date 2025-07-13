@@ -1,15 +1,15 @@
 
 # Base and LoRA models on HF Hub
-base_controlnet_model = "InstantX/FLUX.1-dev-Controlnet-Canny"
-lora_weights_repo = "tommycik/controlFluxAlcol-LoRAReduced"
-base_flux_model = "black-forest-labs/FLUX.1-dev"
 from huggingface_hub import login
 from diffusers import ControlNetModel, StableDiffusionControlNetPipeline, AutoencoderKL, DDIMScheduler
-from transformers import AutoTokenizer, AutoTextEncoder
+from transformers import AutoTokenizer, AutoModel
 import torch
 import os
 from PIL import Image
 
+base_controlnet_model = "InstantX/FLUX.1-dev-Controlnet-Canny"
+lora_weights_repo = "tommycik/controlFluxAlcol-LoRAReduced"
+base_flux_model = "black-forest-labs/FLUX.1-dev"
 
 def main():
     # Ask for Hugging Face token interactively if needed, or remove if not pushing to hub
@@ -26,7 +26,7 @@ def main():
     # Load components
     print("Loading tokenizer, text_encoder, unet, vae from base model...")
     tokenizer = AutoTokenizer.from_pretrained(base_model_path, subfolder="tokenizer")
-    text_encoder = AutoTextEncoder.from_pretrained(base_model_path, subfolder="text_encoder")
+    text_encoder = AutoModel.from_pretrained(base_model_path, subfolder="text_encoder")
     unet = UniDiffusionPipeline.from_pretrained(base_model_path, subfolder="unet").unet
     vae = AutoencoderKL.from_pretrained(base_model_path, subfolder="vae")
     scheduler = DDIMScheduler.from_pretrained(base_model_path, subfolder="scheduler")
