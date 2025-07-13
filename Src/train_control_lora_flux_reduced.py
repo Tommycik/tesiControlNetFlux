@@ -119,36 +119,47 @@ def log_validation(
 
     if not is_final_validation:
         flux_controlnet = accelerator.unwrap_model(flux_controlnet)
+        # Applying LoRA adapters BEFORE pipeline initialization (as suggested previously)
+        if args.use_lora:
+            print("🔧 Applying LoRA adapters to flux_controlnet (validation)...")
+            apply_lora_to_attn(flux_controlnet, args.lora_rank, args.lora_alpha)
+            print("✅ LoRA layers added to flux_controlnet!")
+
         pipeline = FluxControlNetPipeline.from_pretrained(
             args.pretrained_model_name_or_path,
             controlnet=flux_controlnet,
             transformer=flux_transformer,
-            torch_dtype=torch.bfloat16,
+            # ✨ Change: Use the consistent weight_dtype for pipeline initialization
+            torch_dtype=weight_dtype,
         )
     else:
         flux_controlnet = FluxControlNetModel.from_pretrained(
             args.output_dir,
-            torch_dtype=torch.bfloat16,
-            variant=None,  # Disable variant since you're not using fp32.* files
+            # ✨ Change: Use the consistent weight_dtype for pipeline initialization
+            torch_dtype=weight_dtype,
+            variant=None,
             filename="diffusion_pytorch_model.safetensors",
         )
+        # Applying LoRA adapters to newly loaded flux_controlnet
+        if args.use_lora:
+            print("🔧 Applying LoRA adapters to newly loaded flux_controlnet (final validation)...")
+            apply_lora_to_attn(flux_controlnet, args.lora_rank, args.lora_alpha)
+            # Ensure flux_transformer also gets LoRA if it was part of the training with LoRA and is being reloaded/used
+            print("✅ LoRA layers added to newly loaded flux_controlnet!")
+
         pipeline = FluxControlNetPipeline.from_pretrained(
             args.pretrained_model_name_or_path,
             controlnet=flux_controlnet,
             transformer=flux_transformer,
-            torch_dtype=torch.bfloat16,
+            # ✨ Change: Use the consistent weight_dtype for pipeline initialization
+            torch_dtype=weight_dtype,
         )
 
-    #Lora
-    if args.use_lora:
-        print("🔧 Applying LoRA adapters...")
-        # Inject LoRA into both modules
-        apply_lora_to_attn(flux_controlnet, args.lora_rank, args.lora_alpha)
-        apply_lora_to_attn(flux_transformer, args.lora_rank, args.lora_alpha)
-        print("✅ LoRA layers added!")
-
-    pipeline.to(accelerator.device)
+        # Uncommenr this line entirely if args.enable_model_cpu_offload is not active.
+        #    The offloading mechanism will handle device placement.
+        # pipeline.to(accelerator.device)
     pipeline.set_progress_bar_config(disable=True)
+
 
     if args.enable_xformers_memory_efficient_attention:
         pipeline.enable_xformers_memory_efficient_attention()
