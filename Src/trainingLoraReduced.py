@@ -43,8 +43,8 @@ def main():
         # LoRA-specific
         "--use_lora",
         "--lora_rank", "8",
-        "--lora_alpha", "32",
-        "--lora_dropout", "0.1",
+        "--lora_alpha", "16",
+        "--lora_dropout", "0.05",
 
         "--push_to_hub",
         "--hub_model_id", "tommycik/controlFluxAlcol-LoRAReduced"
