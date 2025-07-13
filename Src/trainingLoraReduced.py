@@ -27,14 +27,14 @@ def main():
         "--jsonl_for_train", "./controlnet_dataset/dataset.jsonl",
         "--resolution", "256",  # ⬅️ reduced from 512
         "--learning_rate", "5e-5",
-        "--max_train_steps", "500",
+        "--max_train_steps", "2",
         "--checkpointing_steps", "250",
         "--validation_steps", "500",  # ⬅️ less frequent validation
         "--mixed_precision", "fp16",
         "--validation_image", "controlnet_dataset/images/sample_0000.jpg",
         "--validation_prompt", "transparent glass on white background, the bottom part of the glass presents light grooves",
         "--train_batch_size", "1",  # ⬅️ lower batch.
-        "--gradient_accumulation_steps", "4",  # ⬅️ to maintain effective batch
+        "--gradient_accumulation_steps", "1",  # ⬅️ to maintain effective batch
         "--gradient_checkpointing",
         "--use_8bit_adam",
         "--enable_model_cpu_offload",
