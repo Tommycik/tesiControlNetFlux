@@ -68,38 +68,6 @@ if is_wandb_available():
 
 import torch.nn as nn
 
-#lora utility
-class LoRAAttnProcessor(nn.Module):
-    def __init__(self, hidden_size, rank=4, alpha=32):
-        super().__init__()
-        self.rank = rank
-        self.lora_A = nn.Linear(hidden_size, rank, bias=False)
-        self.lora_B = nn.Linear(rank, hidden_size, bias=False)
-        self.scaling = alpha / rank
-
-    def forward(self, x):
-        return self.lora_B(self.lora_A(x)) * self.scaling
-
-
-def apply_lora_to_attn(module, rank=4, alpha=32):
-    for name, child in module.named_children():
-        # Only inject into actual attention projection layers (e.g., q, k, v, out proj)
-        if isinstance(child, nn.Linear) and "attn" in name.lower():
-            try:
-                hidden_size = child.in_features
-                lora_layer = LoRAAttnProcessor(hidden_size, rank=rank, alpha=alpha)
-                print(f"✅ Injecting LoRA into: {name} ({type(child)})")
-                # Replace the linear layer with a sequential block including LoRA
-                setattr(module, name, nn.Sequential(child, lora_layer))
-            except Exception as e:
-                print(f"⚠️ Skipping {name} due to injection error: {e}")
-        else:
-            # Recursively apply to child modules
-            apply_lora_to_attn(child, rank, alpha)
-
-def save_lora_weights(model, path):
-    lora_weights = {k: v for k, v in model.state_dict().items() if 'lora' in k.lower()}
-    torch.save(lora_weights, os.path.join(path, "lora_weights.pt"))
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
 check_min_version("0.34.0.dev0")
@@ -116,34 +84,44 @@ def log_validation(
 
     if not is_final_validation:
         flux_controlnet = accelerator.unwrap_model(flux_controlnet)
+        # Applying LoRA adapters BEFORE pipeline initialization (as suggested previously)
+        if args.use_lora:
+            print("🔧 Applying LoRA adapters to flux_controlnet (validation)...")
+            apply_lora_to_attn(flux_controlnet, args.lora_rank, args.lora_alpha)
+            print("✅ LoRA layers added to flux_controlnet!")
+
         pipeline = FluxControlNetPipeline.from_pretrained(
             args.pretrained_model_name_or_path,
             controlnet=flux_controlnet,
             transformer=flux_transformer,
-            torch_dtype=torch.bfloat16,
+            # ✨ Change: Use the consistent weight_dtype for pipeline initialization
+            torch_dtype=weight_dtype,
         )
     else:
         flux_controlnet = FluxControlNetModel.from_pretrained(
             args.output_dir,
-            torch_dtype=torch.bfloat16,
-            variant=None,  # Disable variant since you're not using fp32.* files
+            # ✨ Change: Use the consistent weight_dtype for pipeline initialization
+            torch_dtype=weight_dtype,
+            variant=None,
             filename="diffusion_pytorch_model.safetensors",
         )
+        # Applying LoRA adapters to newly loaded flux_controlnet
+        if args.use_lora:
+            print("🔧 Applying LoRA adapters to newly loaded flux_controlnet (final validation)...")
+            apply_lora_to_attn(flux_controlnet, args.lora_rank, args.lora_alpha)
+            # Ensure flux_transformer also gets LoRA if it was part of the training with LoRA and is being reloaded/used
+            print("✅ LoRA layers added to newly loaded flux_controlnet!")
+
         pipeline = FluxControlNetPipeline.from_pretrained(
             args.pretrained_model_name_or_path,
             controlnet=flux_controlnet,
             transformer=flux_transformer,
-            torch_dtype=torch.bfloat16,
+            # ✨ Change: Use the consistent weight_dtype for pipeline initialization
+            torch_dtype=weight_dtype,
         )
 
-    #Lora
-    if args.use_lora:
-        print("🔧 Applying LoRA adapters...")
-        # Inject LoRA into both modules
-        apply_lora_to_attn(flux_controlnet, args.lora_rank, args.lora_alpha)
-        apply_lora_to_attn(flux_transformer, args.lora_rank, args.lora_alpha)
-        print("✅ LoRA layers added!")
-
+        # Uncommenr this line entirely if args.enable_model_cpu_offload is not active.
+        #    The offloading mechanism will handle device placement.
     pipeline.to(accelerator.device)
     pipeline.set_progress_bar_config(disable=True)
 

@@ -12,6 +12,7 @@
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
+# limitations under the License.
 
 import argparse
 import copy
@@ -43,7 +44,7 @@ from transformers import (
     AutoTokenizer,
     CLIPTextModel,
     T5EncoderModel,
-    BitsAndBytesConfig,  #  line for N4 quantization
+    BitsAndBytesConfig,  # line for N4 quantization
 )
 
 import diffusers
@@ -61,7 +62,8 @@ from diffusers.utils.hub_utils import load_or_create_model_card, populate_model_
 from diffusers.utils.import_utils import is_torch_npu_available, is_xformers_available
 from diffusers.utils.torch_utils import is_compiled_module
 
-from peft import LoraConfig
+from peft import LoraConfig, get_peft_model, TaskType, PeftModel # Added PeftModel for loading
+
 
 if is_wandb_available():
     import wandb
@@ -69,39 +71,8 @@ if is_wandb_available():
 import torch.nn as nn
 
 
-#lora utility
-class LoRAAttnProcessor(nn.Module):
-    def __init__(self, hidden_size, rank=4, alpha=32):
-        super().__init__()
-        self.rank = rank
-        self.lora_A = nn.Linear(hidden_size, rank, bias=False)
-        self.lora_B = nn.Linear(rank, hidden_size, bias=False)
-        self.scaling = alpha / rank
-
-    def forward(self, x):
-        return self.lora_B(self.lora_A(x)) * self.scaling
-
-
-def apply_lora_to_attn(module, rank=4, alpha=32):
-    for name, child in module.named_children():
-        # Only inject into actual attention projection layers (e.g., q, k, v, out proj)
-        if isinstance(child, nn.Linear) and "attn" in name.lower():
-            try:
-                hidden_size = child.in_features
-                lora_layer = LoRAAttnProcessor(hidden_size, rank=rank, alpha=alpha)
-                print(f"✅ Injecting LoRA into: {name} ({type(child)})")
-                # Replace the linear layer with a sequential block including LoRA
-                setattr(module, name, nn.Sequential(child, lora_layer))
-            except Exception as e:
-                print(f"⚠️ Skipping {name} due to injection error: {e}")
-        else:
-            # Recursively apply to child modules
-            apply_lora_to_attn(child, rank, alpha)
-
-
-def save_lora_weights(model, path):
-    lora_weights = {k: v for k, v in model.state_dict().items() if 'lora' in k.lower()}
-    torch.save(lora_weights, os.path.join(path, "lora_weights.pt"))
+# REMOVED CUSTOM LoRA UTILITY FUNCTIONS (LoRAAttnProcessor, apply_lora_to_attn, save_lora_weights)
+# These are replaced by PEFT library functionality.
 
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
@@ -113,50 +84,65 @@ if is_torch_npu_available():
 
 
 def log_validation(
-        vae, flux_transformer, flux_controlnet, args, accelerator, weight_dtype, step, is_final_validation=False
+    vae, flux_transformer, flux_controlnet, args, accelerator, weight_dtype, step, is_final_validation=False
 ):
     logger.info("Running validation... ")
 
-    if not is_final_validation:
-        flux_controlnet = accelerator.unwrap_model(flux_controlnet)
-        # Applying LoRA adapters BEFORE pipeline initialization (as suggested previously)
-        if args.use_lora:
-            print("🔧 Applying LoRA adapters to flux_controlnet (validation)...")
-            apply_lora_to_attn(flux_controlnet, args.lora_rank, args.lora_alpha)
-            print("✅ LoRA layers added to flux_controlnet!")
+    pipeline_controlnet_instance = None
+    pipeline_transformer_instance = None
 
-        pipeline = FluxControlNetPipeline.from_pretrained(
-            args.pretrained_model_name_or_path,
-            controlnet=flux_controlnet,
-            transformer=flux_transformer,
-            # ✨ Change: Use the consistent weight_dtype for pipeline initialization
-            torch_dtype=weight_dtype,
-        )
+    if not is_final_validation:
+        # During training validation, the models are already PEFT-wrapped (if use_lora is true)
+        # and prepared by accelerator. We just unwrap them.
+        pipeline_controlnet_instance = accelerator.unwrap_model(flux_controlnet)
+        pipeline_transformer_instance = accelerator.unwrap_model(flux_transformer)
     else:
-        flux_controlnet = FluxControlNetModel.from_pretrained(
-            args.output_dir,
-            # ✨ Change: Use the consistent weight_dtype for pipeline initialization
+        # For final validation, reload base models and then load PEFT adapters
+        logger.info(f"Loading ControlNet from {args.output_dir} for final validation...")
+        base_controlnet = FluxControlNetModel.from_pretrained(
+            args.output_dir, # This is where the base controlnet (or full if not LoRA) is saved
             torch_dtype=weight_dtype,
             variant=None,
             filename="diffusion_pytorch_model.safetensors",
         )
-        # Applying LoRA adapters to newly loaded flux_controlnet
-        if args.use_lora:
-            print("🔧 Applying LoRA adapters to newly loaded flux_controlnet (final validation)...")
-            apply_lora_to_attn(flux_controlnet, args.lora_rank, args.lora_alpha)
-            # Ensure flux_transformer also gets LoRA if it was part of the training with LoRA and is being reloaded/used
-            print("✅ LoRA layers added to newly loaded flux_controlnet!")
-
-        pipeline = FluxControlNetPipeline.from_pretrained(
-            args.pretrained_model_name_or_path,
-            controlnet=flux_controlnet,
-            transformer=flux_transformer,
-            # ✨ Change: Use the consistent weight_dtype for pipeline initialization
+        logger.info(f"Loading Transformer from {args.pretrained_model_name_or_path} for final validation...")
+        base_transformer = FluxTransformer2DModel.from_pretrained(
+            args.pretrained_model_name_or_path, # Base transformer is reloaded from original
+            subfolder="transformer",
+            revision=args.revision,
+            variant=args.variant,
             torch_dtype=weight_dtype,
         )
 
-        # Uncommenr this line entirely if args.enable_model_cpu_offload is not active.
-        #    The offloading mechanism will handle device placement.
+        if args.use_lora:
+            # Load PEFT LoRA weights on top of the base models
+            controlnet_lora_path = os.path.join(args.output_dir, "controlnet_lora")
+            transformer_lora_path = os.path.join(args.output_dir, "transformer_lora")
+
+            if os.path.exists(controlnet_lora_path):
+                pipeline_controlnet_instance = PeftModel.from_pretrained(base_controlnet, controlnet_lora_path)
+                logger.info(f"Loaded ControlNet LoRA from {controlnet_lora_path}")
+            else:
+                logger.warning(f"ControlNet LoRA path {controlnet_lora_path} not found. Using base ControlNet.")
+                pipeline_controlnet_instance = base_controlnet
+
+            if os.path.exists(transformer_lora_path):
+                pipeline_transformer_instance = PeftModel.from_pretrained(base_transformer, transformer_lora_path)
+                logger.info(f"Loaded Transformer LoRA from {transformer_lora_path}")
+            else:
+                logger.warning(f"Transformer LoRA path {transformer_lora_path} not found. Using base Transformer.")
+                pipeline_transformer_instance = base_transformer
+        else:
+            pipeline_controlnet_instance = base_controlnet
+            pipeline_transformer_instance = base_transformer
+
+    pipeline = FluxControlNetPipeline.from_pretrained(
+        args.pretrained_model_name_or_path,
+        controlnet=pipeline_controlnet_instance,
+        transformer=pipeline_transformer_instance,
+        torch_dtype=weight_dtype,
+    )
+
     pipeline.to(accelerator.device)
     pipeline.set_progress_bar_config(disable=True)
 
@@ -193,18 +179,15 @@ def log_validation(
         from diffusers.utils import load_image
 
         validation_image = load_image(validation_image)
-        # maybe need to inference on 1024 to get a good image
         validation_image = validation_image.resize((args.resolution, args.resolution))
 
         images = []
 
-        # pre calculate  prompt embeds, pooled prompt embeds, text ids because t5 does not support autocast
         prompt_embeds, pooled_prompt_embeds, text_ids = pipeline.encode_prompt(
             validation_prompt, prompt_2=validation_prompt
         )
         for _ in range(args.num_validation_images):
             with autocast_ctx:
-                # need to fix in pipeline_flux_controlnet
                 image = pipeline(
                     prompt_embeds=prompt_embeds,
                     pooled_prompt_embeds=pooled_prompt_embeds,
@@ -1011,11 +994,41 @@ def main(args):
         subfolder="scheduler",
     )
     noise_scheduler_copy = copy.deepcopy(noise_scheduler)
+
     vae.requires_grad_(False)
-    flux_transformer.requires_grad_(False)
+    # Removed flux_transformer.requires_grad_(False) if LoRA is applied to it
     text_encoder_one.requires_grad_(False)
     text_encoder_two.requires_grad_(False)
-    flux_controlnet.train()
+
+    flux_controlnet.train() # Set controlnet to train mode
+    # Apply LoRA if enabled
+    if args.use_lora:
+        # Define LoRA config for ControlNet
+        lora_config_controlnet = LoraConfig(
+            r=args.lora_rank,
+            lora_alpha=args.lora_alpha,
+            target_modules=["to_q", "to_k", "to_v", "to_out.0"], # Common attention projection layers
+            lora_dropout=args.lora_dropout,
+            bias="none",
+            task_type=TaskType.FEATURE_EXTRACTION, # A general task type for models like ControlNet
+        )
+        flux_controlnet = get_peft_model(flux_controlnet, lora_config_controlnet)
+        logger.info("Wrapped flux_controlnet with PEFT LoRA!")
+
+        # Apply LoRA to flux_transformer as well if intended (based on original saving logic)
+        # Ensure flux_transformer is trainable if LoRA is applied for training
+        flux_transformer.train()
+        lora_config_transformer = LoraConfig(
+            r=args.lora_rank,
+            lora_alpha=args.lora_alpha,
+            target_modules=["to_q", "to_k", "to_v", "to_out.0"], # Similar attention layers in transformer
+            lora_dropout=args.lora_dropout,
+            bias="none",
+            task_type=TaskType.FEATURE_EXTRACTION, # A general task type
+        )
+        flux_transformer = get_peft_model(flux_transformer, lora_config_transformer)
+        logger.info("Wrapped flux_transformer with PEFT LoRA!")
+
 
     # use some pipeline function
     flux_controlnet_pipeline = FluxControlNetPipeline(
@@ -1043,28 +1056,36 @@ def main(args):
         # create custom saving & loading hooks so that `accelerator.save_state(...)` serializes in a nice format
         def save_model_hook(models, weights, output_dir):
             if accelerator.is_main_process:
-                # Save LoRA weights or full model depending on args.use_lora
                 if args.use_lora:
                     os.makedirs(output_dir, exist_ok=True)
-                    save_lora_weights(flux_controlnet, output_dir)
-                    save_lora_weights(flux_transformer, output_dir)
-                    print("Saved only LoRA weights.")
+                    # Unwrap and save LoRA weights for flux_controlnet
+                    controlnet_to_save = unwrap_model(flux_controlnet)
+                    controlnet_lora_dir = os.path.join(output_dir, "controlnet_lora")
+                    controlnet_to_save.save_pretrained(controlnet_lora_dir)
+                    print(f"Saved ControlNet PEFT LoRA weights to {controlnet_lora_dir}.")
+
+                    # Unwrap and save LoRA weights for flux_transformer
+                    transformer_to_save = unwrap_model(flux_transformer)
+                    transformer_lora_dir = os.path.join(output_dir, "transformer_lora")
+                    transformer_to_save.save_pretrained(transformer_lora_dir)
+                    print(f"Saved Transformer PEFT LoRA weights to {transformer_lora_dir}.")
                 else:
-                    # Save each model in models list to a subdirectory
-                    for i, model in enumerate(models):
-                        sub_dir = os.path.join(output_dir, f"flux_controlnet_{i}")
-                        os.makedirs(sub_dir, exist_ok=True)
-                        model.save_pretrained(sub_dir)
-                #i = len(weights) - 1
+                    # Original logic for saving full model if not using LoRA
+                    # This assumes flux_controlnet is in the 'models' list
+                    for model_component in models:
+                        if isinstance(model_component, FluxControlNetModel):
+                            # Save the full controlnet model
+                            sub_dir = os.path.join(output_dir, "flux_controlnet")
+                            os.makedirs(sub_dir, exist_ok=True)
+                            model_component.save_pretrained(sub_dir)
+                            print(f"Saved full ControlNet model to {sub_dir}")
+                        # Add logic to save full transformer model if needed in this branch
+                        # if isinstance(model_component, FluxTransformer2DModel):
+                        #     sub_dir = os.path.join(output_dir, "flux_transformer")
+                        #     os.makedirs(sub_dir, exist_ok=True)
+                        #     model_component.save_pretrained(sub_dir)
+                        #     print(f"Saved full Transformer model to {sub_dir}")
 
-                #while len(weights) > 0:
-                #  weights.pop()
-                #  model = models[i]
-
-                #  sub_dir = "flux_controlnet"
-                #model.save_pretrained(os.path.join(output_dir, sub_dir))
-
-                #i -= 1
 
         def load_model_hook(models, input_dir):
             while len(models) > 0:
@@ -1084,7 +1105,10 @@ def main(args):
     if args.enable_npu_flash_attention:
         if is_torch_npu_available():
             logger.info("npu flash attention enabled.")
-            flux_transformer.enable_npu_flash_attention()
+            # If LoRA is applied to flux_transformer, it's already wrapped.
+            # You might need to call this on the base model inside the PEFT wrapper
+            # or ensure PEFT correctly passes it through.
+            unwrap_model(flux_transformer).enable_npu_flash_attention()
         else:
             raise ValueError("npu flash attention requires torch_npu extensions and is supported only on npu devices.")
 
@@ -1097,14 +1121,15 @@ def main(args):
                 logger.warning(
                     "xFormers 0.0.16 cannot be used for training in some GPUs. If you observe problems during training, please update xFormers to at least 0.0.17. See https://huggingface.co/docs/diffusers/main/en/optimization/xformers for more details."
                 )
-            flux_transformer.enable_xformers_memory_efficient_attention()
-            flux_controlnet.enable_xformers_memory_efficient_attention()
+            unwrap_model(flux_transformer).enable_xformers_memory_efficient_attention()
+            unwrap_model(flux_controlnet).enable_xformers_memory_efficient_attention()
         else:
             raise ValueError("xformers is not available. Make sure it is installed correctly")
 
     if args.gradient_checkpointing:
-        flux_transformer.enable_gradient_checkpointing()
-        flux_controlnet.enable_gradient_checkpointing()
+        unwrap_model(flux_transformer).enable_gradient_checkpointing()
+        unwrap_model(flux_controlnet).enable_gradient_checkpointing()
+
 
     # Check that all trainable models are in full precision
     low_precision_error_string = (
@@ -1112,10 +1137,14 @@ def main(args):
         " doing mixed precision training, copy of the weights should still be float32."
     )
 
-    if unwrap_model(flux_controlnet).dtype != torch.float32:
-        raise ValueError(
-            f"Controlnet loaded as datatype {unwrap_model(flux_controlnet).dtype}. {low_precision_error_string}"
-        )
+    # For PEFT models, the underlying base model might be cast, but PEFT parameters are typically float32
+    # Ensure the *unwrapped* controlnet is in the correct precision if not using PEFT, or if PEFT requires it.
+    # The PEFT library handles its own parameter types.
+    if not args.use_lora and unwrap_model(flux_controlnet).dtype != torch.float32:
+         raise ValueError(
+             f"Controlnet loaded as datatype {unwrap_model(flux_controlnet).dtype}. {low_precision_error_string}"
+         )
+
 
     # Enable TF32 for faster training on Ampere GPUs,
     # cf https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices
@@ -1141,7 +1170,12 @@ def main(args):
         optimizer_class = torch.optim.AdamW
 
     # Optimizer creation
-    params_to_optimize = flux_controlnet.parameters()
+    # Only optimize PEFT parameters if using LoRA, otherwise optimize full controlnet.
+    if args.use_lora:
+        params_to_optimize = list(flux_controlnet.parameters()) + list(flux_transformer.parameters())
+    else:
+        params_to_optimize = flux_controlnet.parameters()
+
     # use adafactor optimizer to save gpu memory
     if args.use_adafactor:
         from transformers import Adafactor
@@ -1172,7 +1206,7 @@ def main(args):
         weight_dtype = torch.bfloat16
 
     vae.to(accelerator.device, dtype=weight_dtype)
-    #flux_transformer.to(accelerator.device, dtype=weight_dtype)#check
+    # flux_transformer.to(accelerator.device, dtype=weight_dtype) is handled by accelerator.prepare if it's trainable/PEFT-wrapped
 
     def compute_embeddings(batch, proportion_empty_prompts, flux_controlnet_pipeline, weight_dtype, is_train=True):
         prompt_batch = batch[args.caption_column]
@@ -1249,9 +1283,13 @@ def main(args):
         power=args.lr_power,
     )
     # Prepare everything with our `accelerator`.
-    flux_controlnet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
-        flux_controlnet, optimizer, train_dataloader, lr_scheduler
-    )
+    # Pass both models to accelerator.prepare if both are trainable/PEFT-wrapped
+    models_to_prepare = [flux_controlnet]
+    if args.use_lora: # If transformer is also PEFT-wrapped
+        models_to_prepare.append(flux_transformer)
+
+    accelerator.prepare(*models_to_prepare, optimizer, train_dataloader, lr_scheduler)
+
 
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
@@ -1340,7 +1378,11 @@ def main(args):
     image_logs = None
     for epoch in range(first_epoch, args.num_train_epochs):
         for step, batch in enumerate(train_dataloader):
-            with accelerator.accumulate(flux_controlnet):
+            # Pass both models to accelerator.accumulate if both are trainable/PEFT-wrapped
+            models_to_accumulate = [flux_controlnet]
+            if args.use_lora:
+                models_to_accumulate.append(flux_transformer)
+            with accelerator.accumulate(*models_to_accumulate):
                 # Convert images to latent space
                 # vae encode
                 pixel_values = batch["pixel_values"].to(dtype=weight_dtype)
@@ -1392,7 +1434,7 @@ def main(args):
                 noisy_model_input = (1.0 - sigmas) * pixel_latents + sigmas * noise
 
                 # handle guidance
-                if flux_transformer.config.guidance_embeds:
+                if unwrap_model(flux_transformer).config.guidance_embeds: # Access config from unwrapped model
                     guidance_vec = torch.full(
                         (noisy_model_input.shape[0],),
                         args.guidance_scale,
@@ -1436,12 +1478,22 @@ def main(args):
                 loss = F.mse_loss(noise_pred.float(), (noise - pixel_latents).float(), reduction="mean")
                 accelerator.backward(loss)
                 # Check if the gradient of each model parameter contains NaN
+                # If using PEFT, only check trainable parameters (LoRA layers)
                 for name, param in flux_controlnet.named_parameters():
                     if param.grad is not None and torch.isnan(param.grad).any():
-                        logger.error(f"Gradient for {name} contains NaN!")
+                        logger.error(f"Gradient for ControlNet {name} contains NaN!")
+                if args.use_lora: # Check transformer LoRA gradients too
+                    for name, param in flux_transformer.named_parameters():
+                        if param.grad is not None and torch.isnan(param.grad).any():
+                            logger.error(f"Gradient for Transformer {name} contains NaN!")
+
 
                 if accelerator.sync_gradients:
-                    params_to_clip = flux_controlnet.parameters()
+                    # Clip gradients for parameters that are being optimized
+                    if args.use_lora:
+                        params_to_clip = list(flux_controlnet.parameters()) + list(flux_transformer.parameters())
+                    else:
+                        params_to_clip = flux_controlnet.parameters()
                     accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
                 optimizer.step()
                 lr_scheduler.step()
@@ -1458,7 +1510,7 @@ def main(args):
                         # _before_ saving state, check if this save would set us over the `checkpoints_total_limit`
                         if args.checkpoints_total_limit is not None:
                             checkpoints = os.listdir(args.output_dir)
-                            checkpoints = [d for d in checkpoints if d.startswith("checkpoint")]
+                            checkpoints = [d for d in dirs if d.startswith("checkpoint")] # Fix here, should be 'dirs' not 'checkpoints' initially
                             checkpoints = sorted(checkpoints, key=lambda x: int(x.split("-")[1]))
 
                             # before we save the new checkpoint, we need to have at _most_ `checkpoints_total_limit - 1` checkpoints
@@ -1483,7 +1535,7 @@ def main(args):
                         image_logs = log_validation(
                             vae=vae,
                             flux_transformer=flux_transformer,
-                            flux_controlnet=flux_controlnet,
+                            flux_controlnet=flux_controlnet, # Pass the PEFT-wrapped models
                             args=args,
                             accelerator=accelerator,
                             weight_dtype=weight_dtype,
@@ -1498,25 +1550,42 @@ def main(args):
     # Create the pipeline using using the trained modules and save it.
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
-        flux_controlnet = unwrap_model(flux_controlnet)
+        # Save final models (LoRA or full)
         save_weight_dtype = torch.float32
         if args.save_weight_dtype == "fp16":
             save_weight_dtype = torch.float16
         elif args.save_weight_dtype == "bf16":
             save_weight_dtype = torch.bfloat16
-        flux_controlnet.to(save_weight_dtype)
-        if args.save_weight_dtype != "fp32":
-            flux_controlnet.save_pretrained(args.output_dir, variant=args.save_weight_dtype)
+
+        if args.use_lora:
+            # Unwrap and save LoRA weights for flux_controlnet
+            controlnet_to_save = unwrap_model(flux_controlnet)
+            controlnet_lora_dir = os.path.join(args.output_dir, "controlnet_lora")
+            controlnet_to_save.save_pretrained(controlnet_lora_dir)
+            print(f"Final: Saved ControlNet PEFT LoRA weights to {controlnet_lora_dir}.")
+
+            # Unwrap and save LoRA weights for flux_transformer
+            transformer_to_save = unwrap_model(flux_transformer)
+            transformer_lora_dir = os.path.join(args.output_dir, "transformer_lora")
+            transformer_to_save.save_pretrained(transformer_lora_dir)
+            print(f"Final: Saved Transformer PEFT LoRA weights to {transformer_lora_dir}.")
         else:
-            flux_controlnet.save_pretrained(args.output_dir)
+            # Save the full controlnet model
+            flux_controlnet_unwrapped = unwrap_model(flux_controlnet)
+            flux_controlnet_unwrapped.to(save_weight_dtype)
+            if args.save_weight_dtype != "fp32":
+                flux_controlnet_unwrapped.save_pretrained(args.output_dir, variant=args.save_weight_dtype)
+            else:
+                flux_controlnet_unwrapped.save_pretrained(args.output_dir)
+            print(f"Final: Saved full ControlNet model to {args.output_dir}")
+
         # Run a final round of validation.
-        # Setting `vae`, `unet`, and `controlnet` to None to load automatically from `args.output_dir`.
         image_logs = None
         if args.validation_prompt is not None:
             image_logs = log_validation(
                 vae=vae,
-                flux_transformer=flux_transformer,
-                flux_controlnet=None,
+                flux_transformer=flux_transformer, # These are the *original* PEFT-wrapped models if use_lora, or base if not
+                flux_controlnet=flux_controlnet,   # The `is_final_validation=True` path handles loading
                 args=args,
                 accelerator=accelerator,
                 weight_dtype=weight_dtype,
