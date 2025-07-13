@@ -4,7 +4,7 @@ base_controlnet_model = "InstantX/FLUX.1-dev-Controlnet-Canny"
 lora_weights_repo = "tommycik/controlFluxAlcol-LoRAReduced"
 base_flux_model = "black-forest-labs/FLUX.1-dev"
 from huggingface_hub import login
-from diffusers import ControlNetModel, UniDiffusionPipeline, AutoencoderKL, DDIMScheduler
+from diffusers import ControlNetModel, StableDiffusionControlNetPipeline, AutoencoderKL, DDIMScheduler
 from transformers import AutoTokenizer, AutoTextEncoder
 import torch
 import os
@@ -40,14 +40,14 @@ def main():
     print(f"Loading Diffusers-style LoRA weights from {controlnet_lora_path} into ControlNet...")
     controlnet.load_lora_weights(controlnet_lora_path)
 
-    # Create the UniDiffusionPipeline with the LoRA-infused ControlNet
-    print("Creating UniDiffusionPipeline...")
-    pipe = UniDiffusionPipeline(
+    # Create the StableDiffusionControlNetPipeline with the LoRA-infused ControlNet
+    print("Creating StableDiffusionControlNetPipeline...")
+    pipe = StableDiffusionControlNetPipeline(
         vae=vae,
         text_encoder=text_encoder,
         tokenizer=tokenizer,
         unet=unet,
-        controlnet=controlnet,
+        controlnet=controlnet,  #
         scheduler=scheduler,
     )
     pipe.to("cuda")
@@ -64,22 +64,18 @@ def main():
     control_image = Image.open(control_image_path).convert("RGB")
     control_image = control_image.resize((256, 256))
 
-    generator = torch.Generator(device="cuda").manual_seed(0)  # For reproducible results
+    generator = torch.Generator(device="cuda").manual_seed(0)
 
-    # --- MODIFICATION STARTS HERE ---
-    # Add control over conditioning scale and guidance scale
-    controlnet_conditioning_scale = 0.3  # Adjust this value (e.g., 0.5 to 1.0 or more)
-    guidance_scale = 7.5  # Adjust this value (e.g., 7.0 to 9.0)
-    # --- MODIFICATION ENDS HERE ---
+    controlnet_conditioning_scale = 0.7
+    guidance_scale = 7.5
 
     output_image = pipe(
         prompt=prompt,
-        control_image=control_image,
+        image=control_image,  # StableDiffusionControlNetPipeline often uses 'image' for control image
         num_inference_steps=20,
         generator=generator,
-        # Pass the new control parameters to the pipe function
-        controlnet_conditioning_scale=controlnet_conditioning_scale,  #
-        guidance_scale=guidance_scale,  #
+        controlnet_conditioning_scale=controlnet_conditioning_scale,
+        guidance_scale=guidance_scale,
     ).images[0]
 
     output_filename = "output_image_with_controlnet_lora_weighted.png"
