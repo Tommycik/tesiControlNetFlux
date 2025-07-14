@@ -75,7 +75,7 @@ user_prompt = input("Enter prompt: ")
 image = pipe(
     user_prompt,
     control_image=control_image,
-    controlnet_conditioning_scale=0.2,
+    controlnet_conditioning_scale=[0.2],
     num_inference_steps=50,
     guidance_scale=6.0,
 ).images[0]
