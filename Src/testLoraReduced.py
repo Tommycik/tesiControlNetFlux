@@ -3,7 +3,7 @@ from huggingface_hub import login
 from diffusers.utils import load_image
 from diffusers.pipelines.flux.pipeline_flux_controlnet import FluxControlNetPipeline
 from diffusers.models.controlnets.controlnet_flux import FluxControlNetModel
-from peft import PeftModel  # You need to have peft installed: pip install peft
+from peft import PeftModel, LoraConfig # Import LoraConfig  # You need to have peft installed: pip install peft
 
 # Login to Huggingface
 user_input = input("Enter token: ")
