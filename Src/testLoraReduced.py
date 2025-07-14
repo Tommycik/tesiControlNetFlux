@@ -36,9 +36,7 @@ lora_config = LoraConfig(
 # Initialize PeftModel with the base model and the dummy config
 controlnet = PeftModel(controlnet, lora_config)
 
-# Load LoRA weights from the repository
-controlnet.load_adapter(lora_weights_repo, adapter_name="default")
-
+controlnet.load_adapter(lora_weights_repo, adapter_name="default", subfolder="controlnet_lora", weight_name="diffusion_pytorch_model.safetensors") # Changed line
 
 # Load the pipeline with the adapted ControlNet
 pipe = FluxControlNetPipeline.from_pretrained(base_flux_model, controlnet=controlnet, torch_dtype=torch.bfloat16)
@@ -61,3 +59,4 @@ image = pipe(
 
 # Save and display
 image.save("image.jpg")
+image.show()
