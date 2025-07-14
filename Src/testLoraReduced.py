@@ -31,10 +31,12 @@ controlnet = FluxControlNetModel.from_pretrained(base_controlnet_model, torch_dt
 # Define a dummy LoraConfig. These parameters (r, lora_alpha, target_modules)
 # are critical and need to match how your LoRA was trained.
 lora_config = LoraConfig(
-    r=16,
-    lora_alpha=16,
-    target_modules=["to_q", "to_k", "to_v", "to_out.0"], # Common targets for attention layers
-    lora_dropout=0.0,
+    r=8,
+    lora_alpha=32,
+    target_modules=["to_q", "to_k", "to_v",
+            "add_q_proj", "add_k_proj", "add_v_proj",
+            "to_out.0", "to_add_out"], # Common targets for attention layers
+    lora_dropout=0.1,
     bias="none",
     task_type="CAUSAL_LM",
 )
