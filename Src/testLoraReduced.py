@@ -37,7 +37,7 @@ lora_config = LoraConfig(
 controlnet = PeftModel(controlnet, lora_config)
 
 # Load LoRA weights from the repository
-controlnet.load_adapter(lora_weights_repo + "/controlnet_lora", adapter_name="default")
+controlnet.load_adapter(lora_weights_repo, adapter_name="default")
 
 
 # Load the pipeline with the adapted ControlNet
