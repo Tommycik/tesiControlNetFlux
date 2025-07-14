@@ -1046,8 +1046,8 @@ def main(args):
 
                     # Save LoRA-adapted ControlNet
                     peft_controlnet = unwrap_model(flux_controlnet)
-                    controlnet_dir = os.path.join(output_dir, "controlnet_lora")
-                    peft_controlnet.save_pretrained(controlnet_dir)
+                    #controlnet_dir = os.path.join(output_dir, "controlnet_lora")
+                    peft_controlnet.save_pretrained(output_dir)#(controlnet_dir)
 
                     # Save LoRA-adapted Transformer
                     peft_transformer = unwrap_model(flux_transformer)

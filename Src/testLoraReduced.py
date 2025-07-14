@@ -38,7 +38,7 @@ lora_config = LoraConfig(
             "to_out.0", "to_add_out"], # Common targets for attention layers
     lora_dropout=0.1,
     bias="none",
-    task_type="CAUSAL_LM",
+    task_type="FEATURE_EXTRACTION",#"CAUSAL_LM",
 )
 
 # Initialize PeftModel with the base model and the dummy config
