@@ -23,7 +23,7 @@ os.makedirs(local_lora_path, exist_ok=True)
 
 # Download the LoRA weights file
 # Based on your provided file list, 'diffusion_pytorch_model.safetensors' is at the root.
-lora_filename = hf_hub_download(repo_id=lora_weights_repo, filename="diffusion_pytorch_model.safetensors")
+lora_filename = hf_hub_download(repo_id=lora_weights_repo, filename="diffusion_pytorch_model.safetensors", subfolder="controlnet_lora")
 
 # Load base ControlNet model
 controlnet = FluxControlNetModel.from_pretrained(base_controlnet_model, torch_dtype=torch.bfloat16)
