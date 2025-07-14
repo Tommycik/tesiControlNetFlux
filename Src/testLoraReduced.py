@@ -23,7 +23,7 @@ os.makedirs(local_lora_path, exist_ok=True) # Create the directory if it doesn't
 # Ensure 'diffusion_pytorch_model.safetensors' is the correct filename within your repo
 # And 'controlnet_lora' is the correct subfolder if it exists.
 # If 'diffusion_pytorch_model.safetensors' is at the root of 'tommycik/controlFluxAlcol-LoRAReduced', remove subfolder='controlnet_lora'.
-lora_filename = hf_hub_download(repo_id=lora_weights_repo, filename="diffusion_pytorch_model.safetensors", subfolder="controlnet_lora") # Removed controlnet_lora as it was in the error message, but you said your file is named diffusion_pytorch_model.safetensors.
+lora_filename = hf_hub_download(repo_id=lora_weights_repo, filename="diffusion_pytorch_model.safetensors", subfolder="controlnet_lora")
 
 # Load base ControlNet model
 controlnet = FluxControlNetModel.from_pretrained(base_controlnet_model, torch_dtype=torch.bfloat16)
@@ -42,7 +42,8 @@ lora_config = LoraConfig(
 controlnet = PeftModel(controlnet, lora_config)
 
 # Load the state dictionary directly from the downloaded file
-lora_state_dict = torch.load(lora_filename)
+# Added weights_only=False to resolve the UnpicklingError
+lora_state_dict = torch.load(lora_filename, weights_only=False) # Changed line
 controlnet.load_state_dict(lora_state_dict, strict=False) # strict=False might be needed if there are minor mismatches
 
 # Load the pipeline with the adapted ControlNet
