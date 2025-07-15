@@ -1,18 +1,24 @@
 from huggingface_hub import login
+import os
 import subprocess
+import shutil
+
 
 def main():
-    # Ask for Hugging Face token interactively
+    # token hugginface da tastiera
     user_input = input("Enter token: ")
     login(token=user_input)
 
-    # Paths and model identifiers
-    output_dir = "controlnet_lora_model"
+    # Percorsi dataset e output
+    output_dir = "model"
+
+    # Nome base modello
     pretrained_model = "black-forest-labs/FLUX.1-dev"
     controlnet_pretrained = 'InstantX/FLUX.1-dev-Controlnet-Canny'
-    training_script = "train_control_lora_flux.py"
+    # Script ufficiale diffusers per il training
+    training_script = "train_control_lora_official.py"  # Changed script name
 
-    # Accelerate training command with LoRA-specific args
+    # Comando per chiamare lo script di training
     command = [
         "accelerate", "launch", training_script,
         "--pretrained_model_name_or_path", pretrained_model,
@@ -22,36 +28,37 @@ def main():
         "--image_column", "image",
         "--caption_column", "prompt",
         "--jsonl_for_train", "./controlnet_dataset/dataset.jsonl",
-        "--resolution", "512",
-        "--learning_rate", "1e-4",  # LoRA can use a slightly higher LR
+        "--resolution", "256",
+        "--learning_rate", "2e-6",
         "--max_train_steps", "2",
         "--checkpointing_steps", "250",
         "--validation_steps", "125",
-        "--mixed_precision", "bf16",
-        "--validation_image", "controlnet_dataset/images/sample_0000.jpg",
-        "--validation_prompt", "transparent glass on white background, the bottom part of the glass presents light grooves",
-        "--train_batch_size", "1",#for speed,if 8 and 1 gradient needs more than 80 gb of ram(79 + 144 mb)
+        "--mixed_precision", "fp16",
+        "--validation_image", "controlnet_dataset/sample_0000.jpg",
+        "--validation_prompt",
+        "transparent glass on white background, the bottom part of the glass presents light grooves ",
+        "--train_batch_size", "1",
         "--gradient_accumulation_steps", "1",
-        "--gradient_checkpointing",#if not it goes out of memory if train batch >2
-        #"--enable_model_cpu_offload",
+        "--gradient_checkpointing",
         "--use_8bit_adam",
         "--set_grads_to_none",
-
-        # 🆕 LoRA-specific flags
+        # LoRA-specific
         "--use_lora",
-        "--lora_rank", "4",
-        "--lora_alpha", "32",
+        "--lora_rank","2",# "16",
+        "--lora_alpha", "16", # "64",
         "--lora_dropout", "0.1",
-
-        # Push to Hugging Face Hub
         "--push_to_hub",
-        "--hub_model_id", "tommycik/controlFluxAlcol-LoRA"
+        "--hub_model_id", "tommycik/controlFluxAlcolLora",
+        # Added LoRA specific arguments (optional, defaults in official script are often good)
+        "--rank", "4",
+        "--lora_layers", "all-linear"  # Example of explicit lora layers
     ]
 
-    print("Running Accelerate command:")
+    print("Esecuzione comando Accelerate:")
     print(" ".join(command))
 
-    subprocess.run(command)
+    result = subprocess.run(command)
+
 
 if __name__ == "__main__":
     main()

@@ -135,8 +135,8 @@ def estimate(tenInput):
     intWidth = tenInput.shape[2]
     intHeight = tenInput.shape[1]
 
-    assert(intWidth == 480)  # or comment this out if you want flexibility
-    assert(intHeight == 320)
+    #assert(intWidth == 480)  # or comment this out if you want flexibility
+    #assert(intHeight == 320)
 
     return netNetwork(tenInput.to(device).view(1, 3, intHeight, intWidth))[0, :, :, :].cpu()
 # end

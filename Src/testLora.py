@@ -11,14 +11,14 @@ login(token=user_input)
 
 # Base and LoRA models on HF Hub
 base_controlnet_model = "InstantX/FLUX.1-dev-Controlnet-Canny"
-lora_weights_repo = "tommycik/controlFluxAlcol-LoRA"
+lora_weights_repo = "tommycik/controlFluxAlcolLoRA"
 base_flux_model = "black-forest-labs/FLUX.1-dev"
 
 # Load base ControlNet model
 controlnet = FluxControlNetModel.from_pretrained(base_controlnet_model, torch_dtype=torch.bfloat16)
 
 # Load LoRA weights and merge into base controlnet
-controlnet = PeftModel.from_pretrained(controlnet, lora_weights_repo/"controlnet_lora")
+controlnet = PeftModel.from_pretrained(controlnet, lora_weights_repo)
 
 # Load the pipeline with the adapted ControlNet
 pipe = FluxControlNetPipeline.from_pretrained(base_flux_model, controlnet=controlnet, torch_dtype=torch.bfloat16)
