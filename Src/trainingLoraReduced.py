@@ -2,6 +2,9 @@ from huggingface_hub import login
 import subprocess
 import os
 import torch
+#
+#
+#Da rifare
 torch.cuda.empty_cache()
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 def main():

@@ -8,6 +8,10 @@ from safetensors import safe_open
 import os
 import torchvision.transforms as T # Import torchvision transforms
 
+
+#
+#
+#Da rifare
 # Login to Huggingface
 user_input = input("Enter token: ")
 login(token=user_input)

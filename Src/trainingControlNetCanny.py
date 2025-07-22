@@ -46,8 +46,6 @@ def main():
         "--push_to_hub",
         "--hub_model_id", "tommycik/controlFluxAlcol"
     ]
-    #"--use_8bit_adam",
-    # "--set_grads_to_none",
 
     print("Esecuzione comando Accelerate:")
     print(" ".join(command))

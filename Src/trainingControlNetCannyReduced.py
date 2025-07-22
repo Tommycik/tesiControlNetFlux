@@ -17,9 +17,9 @@ def main():
     #print(dataset["train"].column_names)
     # Nome base modello
     pretrained_model = "black-forest-labs/FLUX.1-dev"
-    controlnet_pretrained = "Xlabs-AI/flux-controlnet-hed-diffusers"
+    controlnet_pretrained = 'InstantX/FLUX.1-dev-Controlnet-Canny'
     # Script ufficiale diffusers per il training
-    training_script = "train_controlnet_flux.py"
+    training_script = "train_controlnet_fluxReduced.py"
         # Comando per chiamare lo script di training
     command = [
         "accelerate", "launch", training_script,
@@ -29,13 +29,13 @@ def main():
         "--conditioning_image_column", "condition_image",
         "--image_column", "image",
         "--caption_column", "prompt",
-        "--jsonl_for_train", "./controlnet_dataset/dataset_hed.jsonl",
+        "--jsonl_for_train", "./controlnet_dataset/dataset.jsonl",
         "--resolution", "512",
         "--learning_rate", "2e-6",
         "--max_train_steps", "2",
         "--checkpointing_steps", "250",
         "--validation_steps", "125",
-        "--mixed_precision", "bf16",
+        "--mixed_precision", "fp16",
         "--validation_image", "controlnet_dataset/sample_0000.jpg",
         "--validation_prompt", "transparent glass on white background, the bottom part of the glass presents light grooves ",
         "--train_batch_size", "1",
@@ -44,7 +44,7 @@ def main():
         "--use_8bit_adam",
         "--set_grads_to_none",
         "--push_to_hub",
-        "--hub_model_id", "tommycik/controlFluxAlcolHed"
+        "--hub_model_id", "tommycik/controlFluxAlcolReduced"
     ]
 
     print("Esecuzione comando Accelerate:")

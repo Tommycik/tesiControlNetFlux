@@ -12,7 +12,6 @@
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
-# limitations under the License.
 
 import argparse
 import copy
@@ -44,7 +43,6 @@ from transformers import (
     AutoTokenizer,
     CLIPTextModel,
     T5EncoderModel,
-    BitsAndBytesConfig,
 )
 
 import diffusers
@@ -62,17 +60,18 @@ from diffusers.utils.hub_utils import load_or_create_model_card, populate_model_
 from diffusers.utils.import_utils import is_torch_npu_available, is_xformers_available
 from diffusers.utils.torch_utils import is_compiled_module
 
-from peft import LoraConfig, get_peft_model, PeftModel
+try:
+    import bitsandbytes as bnb
+except ImportError:
+    raise ImportError("To use N4 quantization, install bitsandbytes: `pip install bitsandbytes`.")
 
+from transformers import BitsAndBytesConfig
 
-#
-#
-#Da rifare
+#N4
+bnb_config = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.float16)
+
 if is_wandb_available():
     import wandb
-
-import torch.nn as nn
-
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
 check_min_version("0.34.0.dev0")
@@ -83,13 +82,9 @@ if is_torch_npu_available():
 
 
 def log_validation(
-        vae, flux_transformer, flux_controlnet, args, accelerator, weight_dtype, step, is_final_validation=False
+    vae, flux_transformer, flux_controlnet, args, accelerator, weight_dtype, step, is_final_validation=False
 ):
     logger.info("Running validation... ")
-
-    # We need to unwrap the `flux_controlnet` if it's a PEFT model for saving and loading.
-    # When `is_final_validation` is True, we need to ensure we load the correct state.
-    # For simplicity, we'll ensure the pipeline is created with the unwrapped or loaded model.
 
     if not is_final_validation:
         flux_controlnet = accelerator.unwrap_model(flux_controlnet)
@@ -102,7 +97,8 @@ def log_validation(
     else:
         flux_controlnet = FluxControlNetModel.from_pretrained(
             args.output_dir,
-            torch_dtype=weight_dtype,
+            quantization_config=bnb_config,#N4
+            device_map="auto",
             variant=None,  # Disable variant since you're not using fp32.* files
             filename="diffusion_pytorch_model.safetensors",
         )
@@ -112,43 +108,6 @@ def log_validation(
             transformer=flux_transformer,
             torch_dtype=weight_dtype,
         )
-
-    #Lora
-    if args.use_lora:
-        flux_controlnet.config["model_type"] = "custom_flux"
-        flux_transformer.config["model_type"] = "custom_flux"
-
-        # Define target modules
-        common_target_modules = [
-            "to_q", "to_k", "to_v",
-            "add_q_proj", "add_k_proj", "add_v_proj",
-            "to_out.0", "to_add_out"
-        ]
-
-        # Define LoraConfig
-        lora_config_controlnet = LoraConfig(
-            r=args.lora_rank,
-            lora_alpha=args.lora_alpha,
-            lora_dropout=args.lora_dropout,
-            bias="none",
-            task_type="FEATURE_EXTRACTION",
-            target_modules=common_target_modules,
-        )
-
-        lora_config_transformer = LoraConfig(
-            r=args.lora_rank,
-            lora_alpha=args.lora_alpha,
-            lora_dropout=args.lora_dropout,
-            bias="none",
-            task_type="FEATURE_EXTRACTION",
-            target_modules=common_target_modules,
-        )
-        flux_controlnet = get_peft_model(flux_controlnet, lora_config_controlnet)
-        flux_controlnet.to(accelerator.device, dtype=weight_dtype)
-
-        flux_transformer = get_peft_model(flux_transformer, lora_config_transformer)
-        flux_transformer.to(accelerator.device, dtype=weight_dtype)
-        print("✅ LoRA layers added!")
 
     pipeline.to(accelerator.device)
     pipeline.set_progress_bar_config(disable=True)
@@ -300,12 +259,6 @@ Please adhere to the licensing terms as described [here](https://huggingface.co/
 
 def parse_args(input_args=None):
     parser = argparse.ArgumentParser(description="Simple example of a ControlNet training script.")
-    #Lora
-    parser.add_argument("--use_lora", action="store_true", help="Enable LoRA training")
-    parser.add_argument("--lora_rank", type=int, default=4)
-    parser.add_argument("--lora_alpha", type=int, default=32)
-    parser.add_argument("--lora_dropout", type=float, default=0.1)
-
     parser.add_argument(
         "--pretrained_model_name_or_path",
         type=str,
@@ -324,7 +277,7 @@ def parse_args(input_args=None):
         type=str,
         default=None,
         help="Path to pretrained controlnet model or model identifier from huggingface.co/models."
-             " If not specified controlnet weights are initialized from unet.",
+        " If not specified controlnet weights are initialized from unet.",
     )
     parser.add_argument(
         "--variant",
@@ -730,11 +683,11 @@ def parse_args(input_args=None):
         raise ValueError("`--validation_prompt` must be set if `--validation_image` is set")
 
     if (
-            args.validation_image is not None
-            and args.validation_prompt is not None
-            and len(args.validation_image) != 1
-            and len(args.validation_prompt) != 1
-            and len(args.validation_image) != len(args.validation_prompt)
+        args.validation_image is not None
+        and args.validation_prompt is not None
+        and len(args.validation_image) != 1
+        and len(args.validation_prompt) != 1
+        and len(args.validation_image) != len(args.validation_prompt)
     ):
         raise ValueError(
             "Must provide either 1 `--validation_image`, 1 `--validation_prompt`,"
@@ -808,6 +761,7 @@ def prepare_train_dataset(dataset, accelerator):
     interpolation = getattr(transforms.InterpolationMode, args.image_interpolation_mode.upper(), None)
     if interpolation is None:
         raise ValueError(f"Unsupported interpolation mode {interpolation=}.")
+
     image_transforms = transforms.Compose(
         [
             transforms.Resize(args.resolution, interpolation=interpolation),
@@ -816,6 +770,7 @@ def prepare_train_dataset(dataset, accelerator):
             transforms.Normalize([0.5], [0.5]),
         ]
     )
+
     conditioning_image_transforms = transforms.Compose(
         [
             transforms.Resize(args.resolution, interpolation=interpolation),
@@ -831,6 +786,7 @@ def prepare_train_dataset(dataset, accelerator):
             for image in examples[args.image_column]
         ]
         images = [image_transforms(image) for image in images]
+
         conditioning_images = [
             (image.convert("RGB") if not isinstance(image, str) else Image.open(image).convert("RGB"))
             for image in examples[args.conditioning_image_column]
@@ -838,21 +794,27 @@ def prepare_train_dataset(dataset, accelerator):
         conditioning_images = [conditioning_image_transforms(image) for image in conditioning_images]
         examples["pixel_values"] = images
         examples["conditioning_pixel_values"] = conditioning_images
+
         return examples
 
     with accelerator.main_process_first():
         dataset = dataset.with_transform(preprocess_train)
+
     return dataset
 
 
 def collate_fn(examples):
     pixel_values = torch.stack([example["pixel_values"] for example in examples])
     pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
+
     conditioning_pixel_values = torch.stack([example["conditioning_pixel_values"] for example in examples])
     conditioning_pixel_values = conditioning_pixel_values.to(memory_format=torch.contiguous_format).float()
+
     prompt_ids = torch.stack([torch.tensor(example["prompt_embeds"]) for example in examples])
+
     pooled_prompt_embeds = torch.stack([torch.tensor(example["pooled_prompt_embeds"]) for example in examples])
     text_ids = torch.stack([torch.tensor(example["text_ids"]) for example in examples])
+
     return {
         "pixel_values": pixel_values,
         "conditioning_pixel_values": conditioning_pixel_values,
@@ -867,6 +829,7 @@ def main(args):
             "You cannot use both --report_to=wandb and --hub_token due to a security risk of exposing your token."
             " Please use `huggingface-cli login` to authenticate with the Hub."
         )
+
     logging_out_dir = Path(args.output_dir, args.logging_dir)
 
     if torch.backends.mps.is_available() and args.mixed_precision == "bf16":
@@ -897,6 +860,7 @@ def main(args):
         level=logging.INFO,
     )
     logger.info(accelerator.state, main_process_only=False)
+
     if accelerator.is_local_main_process:
         transformers.utils.logging.set_verbosity_warning()
         diffusers.utils.logging.set_verbosity_info()
@@ -918,22 +882,6 @@ def main(args):
                 repo_id=args.hub_model_id or Path(args.output_dir).name, exist_ok=True, token=args.hub_token
             ).repo_id
 
-    # Determine weight_dtype from args.mixed_precision
-    if args.mixed_precision == "fp16":
-        weight_dtype = torch.float16
-    elif args.mixed_precision == "bf16":
-        weight_dtype = torch.bfloat16
-    else:
-        weight_dtype = torch.float32
-
-    # Setup 4-bit quantization configuration for base models
-    quantization_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",  # Use NF4 quantization
-        bnb_4bit_compute_dtype=weight_dtype,  # Match your fp16 mixed_precision
-        bnb_4bit_use_double_quant=True,  # Enable double quantization for potentially more memory savings
-    )
-
     # Load the tokenizers
     # load clip tokenizer
     tokenizer_one = AutoTokenizer.from_pretrained(
@@ -941,19 +889,16 @@ def main(args):
         subfolder="tokenizer",
         revision=args.revision,
     )
-
     # load t5 tokenizer
     tokenizer_two = AutoTokenizer.from_pretrained(
         args.pretrained_model_name_or_path,
         subfolder="tokenizer_2",
         revision=args.revision,
     )
-
     # load clip text encoder
     text_encoder_one = CLIPTextModel.from_pretrained(
         args.pretrained_model_name_or_path, subfolder="text_encoder", revision=args.revision, variant=args.variant
     )
-
     # load t5 text encoder
     text_encoder_two = T5EncoderModel.from_pretrained(
         args.pretrained_model_name_or_path, subfolder="text_encoder_2", revision=args.revision, variant=args.variant
@@ -965,46 +910,32 @@ def main(args):
         revision=args.revision,
         variant=None,
     )
-
     flux_transformer = FluxTransformer2DModel.from_pretrained(
         args.pretrained_model_name_or_path,
         subfolder="transformer",
         revision=args.revision,
-        variant=args.variant,
-        quantization_config=quantization_config,
-        torch_dtype=weight_dtype, # load full precision before N4 is used.
+        variant=None,
+        quantization_config=bnb_config,
+        device_map="auto",
     )
-
     if args.controlnet_model_name_or_path:
-        logger.info("Loading existing ControlNet weights")
+        logger.info("Loading existing controlnet weights")
         flux_controlnet = FluxControlNetModel.from_pretrained(
             args.controlnet_model_name_or_path,
-            #quantization_config=quantization_config,
-            torch_dtype=torch.float32,  # load full precision without N4
+            quantization_config=bnb_config,#N4
+            device_map="auto",
         )
     else:
-        logger.info("Initializing ControlNet weights from UNet")
-        flux_controlnet = FluxControlNetModel.from_unet(
+        logger.info("Initializing controlnet weights from transformer")
+        # we can define the num_layers, num_single_layers,
+        flux_controlnet = FluxControlNetModel.from_transformer(
             flux_transformer,
-            num_double_layers=args.num_double_layers,
+            attention_head_dim=flux_transformer.config["attention_head_dim"],
+            num_attention_heads=flux_transformer.config["num_attention_heads"],
+            num_layers=args.num_double_layers,
             num_single_layers=args.num_single_layers,
-            #quantization_config=quantization_config,
-            torch_dtype=torch.float32,  # load full precision without N4
         )
-
     logger.info("all models loaded successfully")
-
-    print("🔍 Linear layers in flux_controlnet:")
-    for name, module in flux_controlnet.named_modules():
-        if isinstance(module, torch.nn.Linear):
-            print(name)
-
-    print("/n next")
-    print("🔍 Linear layers in flux_controlnet:")
-    for name, module in flux_transformer.named_modules():
-        if isinstance(module, torch.nn.Linear):
-            print(name)
-
 
     noise_scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(
         args.pretrained_model_name_or_path,
@@ -1043,30 +974,16 @@ def main(args):
         # create custom saving & loading hooks so that `accelerator.save_state(...)` serializes in a nice format
         def save_model_hook(models, weights, output_dir):
             if accelerator.is_main_process:
-                os.makedirs(output_dir, exist_ok=True)
+                i = len(weights) - 1
 
-                if args.use_lora:
-                    print("💾 Saving LoRA adapters in PEFT format...")
+                while len(weights) > 0:
+                    weights.pop()
+                    model = models[i]
 
-                    # Save LoRA-adapted ControlNet
-                    peft_controlnet = unwrap_model(flux_controlnet)
-                    #controlnet_dir = os.path.join(output_dir, "controlnet_lora")
-                    peft_controlnet.save_pretrained(output_dir)#(controlnet_dir)
+                    sub_dir = "flux_controlnet"
+                    model.save_pretrained(os.path.join(output_dir, sub_dir))
 
-                    # Save LoRA-adapted Transformer
-                    peft_transformer = unwrap_model(flux_transformer)
-                    transformer_dir = os.path.join(output_dir, "transformer_lora")
-                    peft_transformer.save_pretrained(transformer_dir)
-
-                    print(f"✅ LoRA adapters saved:\n- {controlnet_dir}\n- {transformer_dir}")
-
-                else:
-                    print("💾 Saving full models (no LoRA)...")
-                    for i, model in enumerate(models):
-                        sub_dir = os.path.join(output_dir, f"flux_controlnet_{i}")
-                        os.makedirs(sub_dir, exist_ok=True)
-                        model.save_pretrained(sub_dir)
-                    print("✅ Full models saved.")
+                    i -= 1
 
         def load_model_hook(models, input_dir):
             while len(models) > 0:
@@ -1079,6 +996,7 @@ def main(args):
 
                 model.load_state_dict(load_model.state_dict())
                 del load_model
+
         accelerator.register_save_state_pre_hook(save_model_hook)
         accelerator.register_load_state_pre_hook(load_model_hook)
 
@@ -1113,10 +1031,11 @@ def main(args):
         " doing mixed precision training, copy of the weights should still be float32."
     )
 
-    if unwrap_model(flux_controlnet).dtype != torch.float32:
-        raise ValueError(
-            f"Controlnet loaded as datatype {unwrap_model(flux_controlnet).dtype}. {low_precision_error_string}"
-        )
+#Using N4 will give error
+    #if unwrap_model(flux_controlnet).dtype != torch.float32:
+       # raise ValueError(
+         #   f"Controlnet loaded as datatype {unwrap_model(flux_controlnet).dtype}. {low_precision_error_string}"
+      #  )
 
     # Enable TF32 for faster training on Ampere GPUs,
     # cf https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices
@@ -1125,7 +1044,7 @@ def main(args):
 
     if args.scale_lr:
         args.learning_rate = (
-                args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size * accelerator.num_processes
+            args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size * accelerator.num_processes
         )
 
     # Use 8-bit Adam for lower memory usage or to fine-tune the model in 16GB GPUs
@@ -1173,7 +1092,7 @@ def main(args):
         weight_dtype = torch.bfloat16
 
     vae.to(accelerator.device, dtype=weight_dtype)
-    #flux_transformer.to(accelerator.device, dtype=weight_dtype)#check
+    flux_transformer.to(accelerator.device, dtype=weight_dtype)
 
     def compute_embeddings(batch, proportion_empty_prompts, flux_controlnet_pipeline, weight_dtype, is_train=True):
         prompt_batch = batch[args.caption_column]
@@ -1221,6 +1140,7 @@ def main(args):
 
     # Then get the training dataset ready to be passed to the dataloader.
     train_dataset = prepare_train_dataset(train_dataset, accelerator)
+
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset,
         shuffle=True,
@@ -1235,7 +1155,7 @@ def main(args):
         len_train_dataloader_after_sharding = math.ceil(len(train_dataloader) / accelerator.num_processes)
         num_update_steps_per_epoch = math.ceil(len_train_dataloader_after_sharding / args.gradient_accumulation_steps)
         num_training_steps_for_scheduler = (
-                args.num_train_epochs * num_update_steps_per_epoch * accelerator.num_processes
+            args.num_train_epochs * num_update_steps_per_epoch * accelerator.num_processes
         )
     else:
         num_training_steps_for_scheduler = args.max_train_steps * accelerator.num_processes
@@ -1310,7 +1230,6 @@ def main(args):
             initial_global_step = 0
         else:
             accelerator.print(f"Resuming from checkpoint {path}")
-            # Load the entire training state (including model, optimizer, scheduler, etc.)
             accelerator.load_state(os.path.join(args.output_dir, path))
             global_step = int(path.split("-")[1])
 
@@ -1499,8 +1418,17 @@ def main(args):
     # Create the pipeline using using the trained modules and save it.
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
-
-        accelerator.save_state(args.output_dir)
+        flux_controlnet = unwrap_model(flux_controlnet)
+        save_weight_dtype = torch.float32
+        if args.save_weight_dtype == "fp16":
+            save_weight_dtype = torch.float16
+        elif args.save_weight_dtype == "bf16":
+            save_weight_dtype = torch.bfloat16
+        flux_controlnet.to(save_weight_dtype)
+        if args.save_weight_dtype != "fp32":
+            flux_controlnet.save_pretrained(args.output_dir, variant=args.save_weight_dtype)
+        else:
+            flux_controlnet.save_pretrained(args.output_dir)
         # Run a final round of validation.
         # Setting `vae`, `unet`, and `controlnet` to None to load automatically from `args.output_dir`.
         image_logs = None
