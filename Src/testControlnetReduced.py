@@ -1,12 +1,28 @@
 import torch
 import os
+import uuid
+import subprocess
+from datetime import datetime
 from huggingface_hub import login
-import torch
 from diffusers.utils import load_image
 from diffusers.pipelines.flux.pipeline_flux_controlnet import FluxControlNetPipeline
 from diffusers.models.controlnets.controlnet_flux import FluxControlNetModel
 from transformers import BitsAndBytesConfig
+import cloudinary
+import cloudinary.uploader
+from io import BytesIO # To save image to a buffer for Cloudinary upload
 
+# --- Cloudinary Configuration ---
+# IMPORTANT: Replace with your actual Cloudinary credentials
+CLOUDINARY_CLOUD_NAME = "your_cloud_name"
+CLOUDINARY_API_KEY = "your_api_key"
+CLOUDINARY_API_SECRET = "your_api_secret"
+
+cloudinary.config(
+    cloud_name=CLOUDINARY_CLOUD_NAME,
+    api_key=CLOUDINARY_API_KEY,
+    api_secret=CLOUDINARY_API_SECRET
+)
 #token hugginface
 user_input = input("Enter token: ")
 login(token = user_input)
@@ -35,4 +51,28 @@ image = pipe(
     guidance_scale=6.0,
 ).images[0]
 image.save("image.jpg")
-image.show()
+try:
+    # Save image to a BytesIO buffer
+    img_byte_arr = BytesIO()
+    image.save(img_byte_arr, format='JPEG') # Or 'PNG' if you prefer
+    img_byte_arr.seek(0) # Rewind to the beginning of the buffer
+
+    # Generate a unique public ID for the image
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    unique_id = str(uuid.uuid4())[:8]
+    public_id = f"generated_images/{timestamp}_{unique_id}" # Optional: organize in a folder
+
+    # Upload to Cloudinary
+    response = cloudinary.uploader.upload(
+        img_byte_arr,
+        public_id=public_id,
+        folder="flux_controlnet_reduced_results", # Optional: specify a folder in Cloudinary
+        resource_type="image"
+    )
+
+    print(f"Image uploaded to Cloudinary: {response['secure_url']}")
+
+except Exception as e:
+    print(f"Error uploading to Cloudinary: {e}")
+
+print("Image pushed to Cloudinary successfully.")
