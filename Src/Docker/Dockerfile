@@ -23,4 +23,4 @@ COPY start.sh .
 RUN chmod +x start.sh
 
 # Default command (can be overridden)
-ENTRYPOINT ["./start.sh"]
+ENTRYPOINT ["start.py"]
