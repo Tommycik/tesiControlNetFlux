@@ -27,18 +27,22 @@ pipe.to("cuda")
 # Load control image
 control_image = load_image("controlnet_dataset/imagesControlCanny/sample_0000_canny.jpg")
 
-# Prompt input
-user_prompt = input("Enter prompt: ")
+def main():
+    # Prompt input
+    user_prompt = input("Enter prompt: ")
 
-# Generate image
-image = pipe(
-    user_prompt,
-    control_image=control_image,
-    controlnet_conditioning_scale=0.2,
-    num_inference_steps=50,
-    guidance_scale=6.0,
-).images[0]
+    # Generate image
+    image = pipe(
+        user_prompt,
+        control_image=control_image,
+        controlnet_conditioning_scale=0.2,
+        num_inference_steps=50,
+        guidance_scale=6.0,
+    ).images[0]
 
-# Save and display
-image.save("image.jpg")
-image.show()
+    # Save and display
+    image.save("image.jpg")
+    image.show()
+
+if __name__ == '__main__':
+    main()

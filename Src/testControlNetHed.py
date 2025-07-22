@@ -16,15 +16,19 @@ pipe = FluxControlNetPipeline.from_pretrained(base_model, controlnet=controlnet,
 pipe.to("cuda")
 
 control_image = load_image("controlnet_dataset/imagesControlCanny/sample_0000_hed.jpg")
-user_input = input("Enter prompt: ")
-#prompt = "A tall glass with gemstones"
-prompt = user_input
-image = pipe(
-    prompt,
-    control_image=control_image,
-    controlnet_conditioning_scale=0.2,
-    num_inference_steps=50,
-    guidance_scale=6.0,
-).images[0]
-image.save("image.jpg")
-image.show()
+def main():
+    user_input = input("Enter prompt: ")
+    #prompt = "A tall glass with gemstones"
+    prompt = user_input
+    image = pipe(
+        prompt,
+        control_image=control_image,
+        controlnet_conditioning_scale=0.2,
+        num_inference_steps=50,
+        guidance_scale=6.0,
+    ).images[0]
+    image.save("image.jpg")
+    image.show()
+
+if __name__ == '__main__':
+    main()

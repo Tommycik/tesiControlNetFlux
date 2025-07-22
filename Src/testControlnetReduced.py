@@ -40,39 +40,43 @@ pipe = FluxControlNetPipeline.from_pretrained(base_model, controlnet=controlnet,
 pipe.to("cuda")
 
 control_image = load_image("controlnet_dataset/imagesControlCanny/sample_0000_canny.jpg")
-user_input = input("Enter prompt: ")
-#prompt = "A tall glass with gemstones"
-prompt = user_input
-image = pipe(
-    prompt,
-    control_image=control_image,
-    controlnet_conditioning_scale=0.2,
-    num_inference_steps=50,
-    guidance_scale=6.0,
-).images[0]
-image.save("image.jpg")
-try:
-    # Save image to a BytesIO buffer
-    img_byte_arr = BytesIO()
-    image.save(img_byte_arr, format='JPEG') # Or 'PNG' if you prefer
-    img_byte_arr.seek(0) # Rewind to the beginning of the buffer
+def main():
+    user_input = input("Enter prompt: ")
+    #prompt = "A tall glass with gemstones"
+    prompt = user_input
+    image = pipe(
+        prompt,
+        control_image=control_image,
+        controlnet_conditioning_scale=0.2,
+        num_inference_steps=50,
+        guidance_scale=6.0,
+    ).images[0]
+    image.save("image.jpg")
+    try:
+        # Save image to a BytesIO buffer
+        img_byte_arr = BytesIO()
+        image.save(img_byte_arr, format='JPEG') # Or 'PNG' if you prefer
+        img_byte_arr.seek(0) # Rewind to the beginning of the buffer
 
-    # Generate a unique public ID for the image
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    unique_id = str(uuid.uuid4())[:8]
-    public_id = f"generated_images/{timestamp}_{unique_id}" # Optional: organize in a folder
+        # Generate a unique public ID for the image
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        unique_id = str(uuid.uuid4())[:8]
+        public_id = f"generated_images/{timestamp}_{unique_id}" # Optional: organize in a folder
 
-    # Upload to Cloudinary
-    response = cloudinary.uploader.upload(
-        img_byte_arr,
-        public_id=public_id,
-        folder="flux_controlnet_reduced_results", # Optional: specify a folder in Cloudinary
-        resource_type="image"
-    )
+        # Upload to Cloudinary
+        response = cloudinary.uploader.upload(
+            img_byte_arr,
+            public_id=public_id,
+            folder="flux_controlnet_reduced_results", # Optional: specify a folder in Cloudinary
+            resource_type="image"
+        )
 
-    print(f"Image uploaded to Cloudinary: {response['secure_url']}")
+        print(f"Image uploaded to Cloudinary: {response['secure_url']}")
 
-except Exception as e:
-    print(f"Error uploading to Cloudinary: {e}")
+    except Exception as e:
+        print(f"Error uploading to Cloudinary: {e}")
 
-print("Image pushed to Cloudinary successfully.")
+    print("Image pushed to Cloudinary successfully.")
+
+if __name__ == '__main__':
+    main()
