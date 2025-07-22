@@ -33,6 +33,8 @@ def main():
             elif peculiar == 5:
                 print("da fare")
                 #todo
+            else:
+                print("invalid option")
 
 
         elif action == 2:
@@ -55,6 +57,8 @@ def main():
             elif peculiar == 5:
                 print("da fare")
                 #todo
+            else:
+                print("invalid option")
 
         elif action == 3:
             break
