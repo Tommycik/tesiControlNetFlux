@@ -22,7 +22,7 @@ def main():
     command = [
         "accelerate", "launch", training_script,
         "--pretrained_model_name_or_path", pretrained_model,
-        "--controlnet_model_name_or_path", controlnet_pretrained,
+        #"--controlnet_model_name_or_path", controlnet_pretrained,
         "--output_dir", output_dir,
         "--conditioning_image_column", "condition_image",
         "--image_column", "image",

@@ -12,7 +12,7 @@ os.makedirs(output_dir, exist_ok=True)
 for filename in os.listdir(input_dir):
     if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff')):
         input_path = os.path.join(input_dir, filename)
-        output_path = os.path.join(output_dir, os.path.splitext(filename)[0] + '_hed.png')
+        output_path = os.path.join(output_dir, os.path.splitext(filename)[0] + '_hed.jpg')
 
         # Run the HED script using subprocess
         subprocess.run([
