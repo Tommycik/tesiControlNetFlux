@@ -71,7 +71,7 @@ def main():
         response = cloudinary.uploader.upload(
             img_byte_arr,
             public_id=public_id,
-            folder="flux_controlnet_reduced_results", # Optional: specify a folder in Cloudinary
+            folder="flux_control_lora_results", # Optional: specify a folder in Cloudinary
             resource_type="image"
         )
 
