@@ -1151,6 +1151,9 @@ def main(args):
         num_cycles=args.lr_num_cycles,
         power=args.lr_power,
     )
+    # Disable AMP gradient scaling for bitsandbytes + fp16
+    if args.use_8bit_adam and accelerator.mixed_precision == "fp16":
+        accelerator.scaler = None
     # Prepare everything with our `accelerator`.
     flux_controlnet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
         flux_controlnet, optimizer, train_dataloader, lr_scheduler
