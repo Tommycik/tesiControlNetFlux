@@ -34,7 +34,7 @@ from accelerate.utils import DistributedType, ProjectConfiguration, set_seed
 from datasets import load_dataset
 from huggingface_hub import create_repo, upload_folder
 from packaging import version
-from peft import LoraConfig, set_peft_model_state_dict
+from peft import LoraConfig,, get_peft_model, set_peft_model_state_dict
 from peft.utils import get_peft_model_state_dict
 from PIL import Image
 from torchvision import transforms
