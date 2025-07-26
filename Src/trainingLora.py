@@ -34,7 +34,7 @@ def main():
         "--checkpointing_steps", "250",
         "--validation_steps", "125",
         "--mixed_precision", "fp16",
-        "--validation_image", "controlnet_dataset/sample_0000.jpg",
+        "--validation_image", "controlnet_dataset/images/sample_0000.jpg",
         "--validation_prompt",
         "transparent glass on white background, the bottom part of the glass presents light grooves ",
         "--train_batch_size", "1",
