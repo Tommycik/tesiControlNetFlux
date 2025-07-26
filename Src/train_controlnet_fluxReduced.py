@@ -840,12 +840,28 @@ def main(args):
 
     accelerator_project_config = ProjectConfiguration(project_dir=args.output_dir, logging_dir=str(logging_out_dir))
 
-    accelerator = Accelerator(
-        gradient_accumulation_steps=args.gradient_accumulation_steps,
-        mixed_precision=args.mixed_precision,
-        log_with=args.report_to,
-        project_config=accelerator_project_config,
-    )
+    #accelerator = Accelerator(
+        #gradient_accumulation_steps=args.gradient_accumulation_steps,
+        #mixed_precision=args.mixed_precision,
+        #log_with=args.report_to,
+        #project_config=accelerator_project_config,
+    #)
+    # If using bitsandbytes 8bit optimizer with fp16, disable gradient scaling
+    kwargs = {
+        "gradient_accumulation_steps": args.gradient_accumulation_steps,
+        "mixed_precision": args.mixed_precision,
+        "log_with": args.report_to,
+        "project_config": accelerator_project_config,
+    }
+    if args.use_8bit_adam and args.mixed_precision == "fp16":
+        kwargs["gradient_clipping"] = False  # Optional: also disable clipping to avoid related issues
+        kwargs["dynamo_backend"] = None
+        kwargs["cpu"] = False
+        kwargs["step_scheduler_with_optimizer"] = False
+        kwargs["even_batches"] = False
+        kwargs["use_grad_scaler"] = False  #this gave problems by unscaling fp16
+
+    accelerator = Accelerator(**kwargs)
 
     # Disable AMP for MPS. A technique for accelerating machine learning computations on iOS and macOS devices.
     if torch.backends.mps.is_available():
