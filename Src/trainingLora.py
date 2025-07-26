@@ -41,12 +41,12 @@ def main():
         "--gradient_accumulation_steps", "1",
         "--gradient_checkpointing",
         "--use_8bit_adam",
-        "--set_grads_to_none",
+        #"--set_grads_to_none",
         # LoRA-specific
         "--use_lora",
-        "--lora_rank","2",# "16",
-        "--lora_alpha", "16", # "64",
-        "--lora_dropout", "0.1",
+        "--rank","2",# "16",
+        #"--lora_alpha", "16", # "64",
+        #"--lora_dropout", "0.1",
         "--push_to_hub",
         "--hub_model_id", "tommycik/controlFluxAlcolLora",
         # Added LoRA specific arguments (optional, defaults in official script are often good)
