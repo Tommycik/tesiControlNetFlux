@@ -34,8 +34,6 @@ base_flux_model = "black-forest-labs/FLUX.1-dev"
 pipe = FluxControlPipeline.from_pretrained("black-forest-labs/FLUX.1-dev", torch_dtype=torch.bfloat16).to("cuda")
 pipe.load_lora_weights(lora_weights_repo)
 
-open_pose = OpenposeDetector.from_pretrained("lllyasviel/Annotators")
-
 # Load control image
 control_image = load_image("controlnet_dataset/imagesControlCanny/sample_0000_canny.jpg")
 
