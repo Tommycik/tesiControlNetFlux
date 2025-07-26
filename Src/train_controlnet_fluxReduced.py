@@ -854,7 +854,6 @@ def main(args):
         "project_config": accelerator_project_config,
     }
     if args.use_8bit_adam and args.mixed_precision == "fp16":
-        kwargs["gradient_clipping"] = False  # Optional: also disable clipping to avoid related issues
         kwargs["dynamo_backend"] = None
         kwargs["cpu"] = False
         kwargs["step_scheduler_with_optimizer"] = False
