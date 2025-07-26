@@ -34,7 +34,7 @@ bnb_config = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.
 controlnet = FluxControlNetModel.from_pretrained(
     controlnet_model,
     quantization_config=bnb_config,
-    device_map="auto"
+    #device_map="auto" not supported
 )
 pipe = FluxControlNetPipeline.from_pretrained(base_model, controlnet=controlnet, torch_dtype=torch.float16)
 pipe.to("cuda")
