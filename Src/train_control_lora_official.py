@@ -22,7 +22,8 @@ import random
 import shutil
 from contextlib import nullcontext
 from pathlib import Path
-
+import os # Necessario per creare cartelle
+from huggingface_hub import HfApi, upload_folder # Necessario per l'upload su HF
 import accelerate
 import numpy as np
 import torch
@@ -872,7 +873,20 @@ def main(args):
         target_modules=target_modules,
         lora_bias=args.use_lora_bias,
     )
-    flux_transformer.add_adapter(transformer_lora_config)
+
+    controlnet_lora_config = LoraConfig(  # lora sulla controlNet e transformer
+        r=args.rank,
+        lora_alpha=args.rank,
+        init_lora_weights="gaussian" if args.gaussian_init_lora else True,
+        target_modules=target_modules,
+        lora_bias=args.use_lora_bias,
+    )
+    #flux_transformer.add_adapter(transformer_lora_config)
+    # Applica LoRA ai modelli base
+    flux_controlnet = get_peft_model(flux_controlnet, lora_config_controlnet)
+    flux_transformer = get_peft_model(flux_transformer, lora_config_transformer)  # Applica LoRA anche al Transformer
+    print("✅ Layer LoRA aggiunti a ControlNet e Transformer!")
+    flux_controlnet.print_trainable_parameters()  # Stampa un riepilogo dei parametri allenabili (solo LoRA)
 
     if args.train_norm_layers:
         for name, param in flux_transformer.named_parameters():
@@ -1351,21 +1365,65 @@ def main(args):
     # Create the pipeline using using the trained modules and save it.
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
-        flux_transformer = unwrap_model(flux_transformer)
-        if args.upcast_before_saving:
-            flux_transformer.to(torch.float32)
-        transformer_lora_layers = get_peft_model_state_dict(flux_transformer)
-        if args.train_norm_layers:
-            transformer_norm_layers = {
-                f"transformer.{name}": param
-                for name, param in flux_transformer.named_parameters()
-                if any(k in name for k in NORM_LAYER_PREFIXES)
-            }
-            transformer_lora_layers = {**transformer_lora_layers, **transformer_norm_layers}
-        FluxControlPipeline.save_lora_weights(
-            save_directory=args.output_dir,
-            transformer_lora_layers=transformer_lora_layers,
-        )
+        # ... (il tuo codice esistente, ad esempio la fine del ciclo di training o dove salvi il modello finale)
+
+        # Solo il processo principale deve salvare i modelli e caricarli su Hugging Face
+        if accelerator.is_main_process:
+            print("\n--- Inizio salvataggio e upload dei modelli LoRA ---")
+
+            # 1. Salvataggio locale dei pesi e della configurazione LoRA
+            # Creiamo sottocartelle dedicate per i pesi LoRA
+            controlnet_lora_output_dir = os.path.join(args.output_dir, "controlnet_lora")
+            transformer_lora_output_dir = os.path.join(args.output_dir, "transformer_lora")
+
+            os.makedirs(controlnet_lora_output_dir, exist_ok=True)
+            os.makedirs(transformer_lora_output_dir, exist_ok=True)
+
+            # Salviamo esplicitamente gli adattatori LoRA per ControlNet e Transformer.
+            # Questo crea 'adapter_config.json' e 'adapter_model.safetensors' in queste cartelle.
+            accelerator.unwrap_model(flux_controlnet).save_pretrained(controlnet_lora_output_dir)
+            print(f"✅ Pesi e configurazione LoRA per ControlNet salvati in: {controlnet_lora_output_dir}")
+
+            accelerator.unwrap_model(flux_transformer).save_pretrained(transformer_lora_output_dir)
+            print(f"✅ Pesi e configurazione LoRA per Transformer salvati in: {transformer_lora_output_dir}")
+
+            # 2. Caricamento automatico su Hugging Face Hub
+            # Assicurati di aver eseguito 'huggingface-cli login' nel tuo terminale O di aver chiamato login(token="hf_...")
+            # altrimenti l'upload fallirà per problemi di autenticazione.
+
+            hf_api = HfApi()
+            hf_repo_id = "tommycik/controlFluxAlcolLoRA"  # Il tuo ID del repository su Hugging Face
+
+            try:
+                print(f"🚀 Inizio upload della cartella '{controlnet_lora_output_dir}' a Hugging Face Hub: {hf_repo_id}")
+                hf_api.upload_folder(
+                    folder_path=controlnet_lora_output_dir,
+                    repo_id=hf_repo_id,
+                    repo_type="model",
+                    commit_message="Add ControlNet LoRA adapter files (config and weights)",
+                    # Ignora eventuali file che non vuoi caricare, ad es. ".gitkeep"
+                    # ignore_patterns=["*.pt"]
+                )
+                print(
+                    f"✅ ControlNet LoRA caricato con successo su Hugging Face Hub: https://huggingface.co/{hf_repo_id}")
+
+                # Se vuoi caricare anche il Transformer LoRA in un repository separato o in una sottocartella dello stesso
+                # Puoi replicare il blocco upload_folder qui per transformer_lora_output_dir
+                # Esempio per caricarlo in una sottocartella dentro lo stesso repo:
+                # hf_api.upload_folder(
+                #     folder_path=transformer_lora_output_dir,
+                #     repo_id=hf_repo_id,
+                #     repo_type="model",
+                #     commit_message="Add Transformer LoRA adapter files",
+                #     path_in_repo="transformer_lora_weights", # Questa è la sottocartella nel repo HF
+                # )
+                # print(f"✅ Transformer LoRA caricato con successo in una sottocartella di {hf_repo_id}")
+
+
+            except Exception as e:
+                print(f"❌ Errore durante l'upload a Hugging Face Hub: {e}")
+                print(
+                    "Assicurati di aver fatto il login a Hugging Face Hub (huggingface-cli login) e che il repository esista e tu abbia i permessi.")
 
         del flux_transformer
         del text_encoding_pipeline
