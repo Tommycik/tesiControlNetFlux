@@ -1,9 +1,11 @@
 import torch
 from huggingface_hub import login
+from controlnet_aux import OpenposeDetector
+from diffusers import FluxControlPipeline, FluxTransformer2DModel
 from diffusers.utils import load_image
-from diffusers.pipelines.flux.pipeline_flux_controlnet import FluxControlNetPipeline
-from diffusers.models.controlnets.controlnet_flux import FluxControlNetModel
-from peft import PeftModel  # You need to have peft installed: pip install peft
+from PIL import Image
+import numpy as np
+import torch
 import cloudinary
 import cloudinary.uploader
 import uuid
@@ -26,19 +28,13 @@ user_input = input("Enter token: ")
 login(token=user_input)
 
 # Base and LoRA models on HF Hub
-base_controlnet_model = "InstantX/FLUX.1-dev-Controlnet-Canny"
 lora_weights_repo = "tommycik/controlFluxAlcolLoRA"
 base_flux_model = "black-forest-labs/FLUX.1-dev"
 
-# Load base ControlNet model
-controlnet = FluxControlNetModel.from_pretrained(base_controlnet_model, torch_dtype=torch.bfloat16)
-
-# Load LoRA weights and merge into base controlnet
-controlnet = PeftModel.from_pretrained(controlnet, lora_weights_repo)
-
-# Load the pipeline with the adapted ControlNet
-pipe = FluxControlNetPipeline.from_pretrained(base_flux_model, controlnet=controlnet, torch_dtype=torch.bfloat16)
-pipe.to("cuda")
+transformer = FluxTransformer2DModel.from_pretrained(lora_weights_repo)
+pipe = FluxControlPipeline.from_pretrained(
+  base_flux_model,  transformer=transformer, torch_dtype=torch.bfloat16
+).to("cuda")
 
 # Load control image
 control_image = load_image("controlnet_dataset/imagesControlCanny/sample_0000_canny.jpg")
