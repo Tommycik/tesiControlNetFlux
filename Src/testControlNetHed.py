@@ -5,6 +5,9 @@ import torch
 from diffusers.utils import load_image
 from diffusers.pipelines.flux.pipeline_flux_controlnet import FluxControlNetPipeline
 from diffusers.models.controlnets.controlnet_flux import FluxControlNetModel
+import cloudinary
+import cloudinary.uploader
+from io import BytesIO # To save image to a buffer for Cloudinary upload
 
 # --- Cloudinary Configuration ---
 CLOUDINARY_CLOUD_NAME = "dz9gbl0lo"
