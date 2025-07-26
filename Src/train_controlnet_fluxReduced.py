@@ -98,7 +98,7 @@ def log_validation(
         flux_controlnet = FluxControlNetModel.from_pretrained(
             args.output_dir,
             quantization_config=bnb_config,#N4
-            device_map="auto",
+            #device_map="auto", creates error need to manually define _no_split_modules
             variant=None,  # Disable variant since you're not using fp32.* files
             filename="diffusion_pytorch_model.safetensors",
         )
@@ -916,14 +916,14 @@ def main(args):
         revision=args.revision,
         variant=None,
         quantization_config=bnb_config,
-        device_map="auto",
+        # device_map="auto", creates error need to manually define _no_split_modules
     )
     if args.controlnet_model_name_or_path:
         logger.info("Loading existing controlnet weights")
         flux_controlnet = FluxControlNetModel.from_pretrained(
             args.controlnet_model_name_or_path,
             quantization_config=bnb_config,#N4
-            device_map="auto",
+            # device_map="auto", creates error need to manually define _no_split_modules
         )
     else:
         logger.info("Initializing controlnet weights from transformer")
