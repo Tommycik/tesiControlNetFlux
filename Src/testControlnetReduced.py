@@ -51,6 +51,7 @@ def main():
         guidance_scale=6.0,
     ).images[0]
     image.save("image.jpg")
+    #su a100 richiede 1 minuto inferenza
     try:
         # Save image to a BytesIO buffer
         img_byte_arr = BytesIO()
