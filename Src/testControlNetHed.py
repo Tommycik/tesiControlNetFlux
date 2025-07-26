@@ -7,6 +7,9 @@ from diffusers.pipelines.flux.pipeline_flux_controlnet import FluxControlNetPipe
 from diffusers.models.controlnets.controlnet_flux import FluxControlNetModel
 import cloudinary
 import cloudinary.uploader
+import uuid
+import subprocess
+from datetime import datetime
 from io import BytesIO # To save image to a buffer for Cloudinary upload
 
 # --- Cloudinary Configuration ---

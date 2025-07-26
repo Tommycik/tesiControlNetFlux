@@ -6,6 +6,9 @@ from diffusers.models.controlnets.controlnet_flux import FluxControlNetModel
 from peft import PeftModel  # You need to have peft installed: pip install peft
 import cloudinary
 import cloudinary.uploader
+import uuid
+import subprocess
+from datetime import datetime
 from io import BytesIO # To save image to a buffer for Cloudinary upload
 
 # --- Cloudinary Configuration ---
