@@ -874,11 +874,19 @@ def main(args):
         lora_bias=args.use_lora_bias,
     )
 
+    controlnet_lora_config = LoraConfig(  # lora sulla controlNet e transformer
+        r=args.rank,
+        lora_alpha=args.rank,
+        init_lora_weights="gaussian" if args.gaussian_init_lora else True,
+        target_modules=target_modules,
+        lora_bias=args.use_lora_bias,
+    )
     #flux_transformer.add_adapter(transformer_lora_config)
     # Applica LoRA ai modelli base
-    flux_transformer = get_peft_model(flux_transformer, transformer_lora_config)  # Applica LoRA anche al Transformer
+    flux_controlnet = get_peft_model(flux_controlnet, lora_config_controlnet)
+    flux_transformer = get_peft_model(flux_transformer, lora_config_transformer)  # Applica LoRA anche al Transformer
     print("✅ Layer LoRA aggiunti a ControlNet e Transformer!")
-    flux_transformer.print_trainable_parameters()  # Stampa un riepilogo dei parametri allenabili (solo LoRA)
+    flux_controlnet.print_trainable_parameters()  # Stampa un riepilogo dei parametri allenabili (solo LoRA)
 
     if args.train_norm_layers:
         for name, param in flux_transformer.named_parameters():
@@ -1365,14 +1373,16 @@ def main(args):
 
             # 1. Salvataggio locale dei pesi e della configurazione LoRA
             # Creiamo sottocartelle dedicate per i pesi LoRA
-            #controlnet_lora_output_dir = os.path.join(args.output_dir, "controlnet_lora")
+            controlnet_lora_output_dir = os.path.join(args.output_dir, "controlnet_lora")
             transformer_lora_output_dir = os.path.join(args.output_dir, "transformer_lora")
 
-            #os.makedirs(controlnet_lora_output_dir, exist_ok=True)
+            os.makedirs(controlnet_lora_output_dir, exist_ok=True)
             os.makedirs(transformer_lora_output_dir, exist_ok=True)
 
             # Salviamo esplicitamente gli adattatori LoRA per ControlNet e Transformer.
             # Questo crea 'adapter_config.json' e 'adapter_model.safetensors' in queste cartelle.
+            accelerator.unwrap_model(flux_controlnet).save_pretrained(controlnet_lora_output_dir)
+            print(f"✅ Pesi e configurazione LoRA per ControlNet salvati in: {controlnet_lora_output_dir}")
 
             accelerator.unwrap_model(flux_transformer).save_pretrained(transformer_lora_output_dir)
             print(f"✅ Pesi e configurazione LoRA per Transformer salvati in: {transformer_lora_output_dir}")
@@ -1385,9 +1395,9 @@ def main(args):
             hf_repo_id = "tommycik/controlFluxAlcolLoRA"  # Il tuo ID del repository su Hugging Face
 
             try:
-                print(f"🚀 Inizio upload della cartella '{transformer_lora_output_dir}' a Hugging Face Hub: {hf_repo_id}")
+                print(f"🚀 Inizio upload della cartella '{controlnet_lora_output_dir}' a Hugging Face Hub: {hf_repo_id}")
                 hf_api.upload_folder(
-                    folder_path=transformer_lora_output_dir,
+                    folder_path=controlnet_lora_output_dir,
                     repo_id=hf_repo_id,
                     repo_type="model",
                     commit_message="Add ControlNet LoRA adapter files (config and weights)",
