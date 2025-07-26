@@ -13,7 +13,6 @@ import cloudinary.uploader
 from io import BytesIO # To save image to a buffer for Cloudinary upload
 
 # --- Cloudinary Configuration ---
-# IMPORTANT: Replace with your actual Cloudinary credentials
 CLOUDINARY_CLOUD_NAME = "dz9gbl0lo"
 CLOUDINARY_API_KEY = "172654867169949"
 CLOUDINARY_API_SECRET = "Vre4sIxwv3my0QP3Knuq7QID55M"
