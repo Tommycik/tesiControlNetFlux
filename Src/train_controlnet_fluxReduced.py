@@ -853,11 +853,11 @@ def main(args):
         "log_with": args.report_to,
         "project_config": accelerator_project_config,
     }
-    if args.use_8bit_adam and args.mixed_precision == "fp16":
-        kwargs["dynamo_backend"] = None
-        kwargs["cpu"] = False
-        kwargs["step_scheduler_with_optimizer"] = False
-        kwargs["use_grad_scaler"] = False  #this gave problems by unscaling fp16
+    #if args.use_8bit_adam and args.mixed_precision == "fp16":
+        #kwargs["dynamo_backend"] = None
+        #kwargs["cpu"] = False
+        #kwargs["step_scheduler_with_optimizer"] = False
+        #kwargs["use_grad_scaler"] = False  #this gave problems by unscaling fp16
 
     accelerator = Accelerator(**kwargs)
 
