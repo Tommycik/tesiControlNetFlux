@@ -47,7 +47,7 @@ def main():
         "--hub_model_id", "tommycik/controlFluxAlcolReduced"
     ]
 
-   #4 ore di training con questa configurazione
+   #4 ore di training con questa configurazione su a100
     print("Esecuzione comando Accelerate:")
     print(" ".join(command))
 
