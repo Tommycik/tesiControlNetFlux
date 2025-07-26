@@ -1270,6 +1270,7 @@ def main(args):
                     control_latents.shape[2],
                     control_latents.shape[3],
                 )
+                #todo separare reduced da controlnet
                 # Proposed Change: Pass the conditioning_pixel_values directly (assuming they are 3-channel RGB after preprocessing)
                 control_image = batch["conditioning_pixel_values"].to(dtype=weight_dtype)
                 # Ensure it's 3 channels. The transforms already convert to RGB.
