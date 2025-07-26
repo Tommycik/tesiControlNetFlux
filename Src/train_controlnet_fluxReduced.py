@@ -1419,15 +1419,21 @@ def main(args):
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
         flux_controlnet = unwrap_model(flux_controlnet)
-        save_weight_dtype = torch.float32
-        if args.save_weight_dtype == "fp16":
-            save_weight_dtype = torch.float16
-        elif args.save_weight_dtype == "bf16":
-            save_weight_dtype = torch.bfloat16
-        flux_controlnet.to(save_weight_dtype)
-        if args.save_weight_dtype != "fp32":
-            flux_controlnet.save_pretrained(args.output_dir, variant=args.save_weight_dtype)
+        is_quantized = getattr(flux_controlnet, 'is_loaded_in_4bit', False)
+
+        if not is_quantized:
+            save_weight_dtype = torch.float32
+            if args.save_weight_dtype == "fp16":
+                save_weight_dtype = torch.float16
+            elif args.save_weight_dtype == "bf16":
+                save_weight_dtype = torch.bfloat16
+            flux_controlnet.to(save_weight_dtype)
+            if args.save_weight_dtype != "fp32":
+                flux_controlnet.save_pretrained(args.output_dir, variant=args.save_weight_dtype)
+            else:
+                flux_controlnet.save_pretrained(args.output_dir)
         else:
+            # Do not attempt casting; just save directly
             flux_controlnet.save_pretrained(args.output_dir)
         # Run a final round of validation.
         # Setting `vae`, `unet`, and `controlnet` to None to load automatically from `args.output_dir`.
