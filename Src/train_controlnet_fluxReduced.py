@@ -857,7 +857,6 @@ def main(args):
         kwargs["dynamo_backend"] = None
         kwargs["cpu"] = False
         kwargs["step_scheduler_with_optimizer"] = False
-        kwargs["even_batches"] = False
         kwargs["use_grad_scaler"] = False  #this gave problems by unscaling fp16
 
     accelerator = Accelerator(**kwargs)
