@@ -41,7 +41,7 @@ def main():
         "--gradient_accumulation_steps", "1",
         "--gradient_checkpointing",
         "--use_8bit_adam",
-        "--set_grads_to_none",
+        #"--set_grads_to_none",
         # LoRA-specific
         "--use_lora",
         "--rank","2",# "16",
