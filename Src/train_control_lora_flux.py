@@ -63,47 +63,6 @@ from diffusers.utils.torch_utils import is_compiled_module
 from peft import get_peft_model, LoraConfig, TaskType
 import torch.nn as nn
 
-# TODO: Add LoRA config and wrap ControlNet
-# ========================
-def wrap_with_lora(controlnet_model):
-    print("🔍 Searching for linear modules to apply LoRA...\n")
-
-    # Auto-discover candidate target modules (usually Linear layers)
-    candidate_modules = []
-    for name, module in controlnet_model.named_modules():
-        if isinstance(module, nn.Linear):
-            candidate_modules.append(name)
-
-    print("📋 Found Linear layers:")
-    for name in candidate_modules:
-        print(f" - {name}")
-
-    # Optional: manually filter modules if needed
-    target_modules = [name for name in candidate_modules if
-                      "to_q" in name or "to_k" in name or "to_v" in name or "out_proj" in name]
-
-    print("\n✅ Using the following target modules for LoRA:")
-    for name in target_modules:
-        print(f" - {name}")
-
-    # Define the LoRA configuration
-    lora_config = LoraConfig(
-        r=16,
-        lora_alpha=32,
-        target_modules=target_modules,
-        lora_dropout=0.05,
-        bias="none",
-        task_type=TaskType.FEATURE_EXTRACTION  # or TaskType.CAUSAL_LM, depending on your use case
-    )
-
-    # Wrap the model
-    lora_model = get_peft_model(controlnet_model, lora_config)
-
-    print("\n📈 Trainable parameter report:")
-    lora_model.print_trainable_parameters()
-
-    return lora_model
-
 if is_wandb_available():
     import wandb
 
@@ -739,6 +698,47 @@ def parse_args(input_args=None):
 
     return args
 
+
+# TODO: Add LoRA config and wrap ControlNet
+# ========================
+def wrap_with_lora(controlnet_model):
+    print("🔍 Searching for linear modules to apply LoRA...\n")
+
+    # Auto-discover candidate target modules (usually Linear layers)
+    candidate_modules = []
+    for name, module in controlnet_model.named_modules():
+        if isinstance(module, nn.Linear):
+            candidate_modules.append(name)
+
+    print("📋 Found Linear layers:")
+    for name in candidate_modules:
+        print(f" - {name}")
+
+    # Optional: manually filter modules if needed
+    target_modules = [name for name in candidate_modules if
+                      "to_q" in name or "to_k" in name or "to_v" in name or "out_proj" in name]
+
+    print("\n✅ Using the following target modules for LoRA:")
+    for name in target_modules:
+        print(f" - {name}")
+
+    # Define the LoRA configuration
+    lora_config = LoraConfig(
+        r=args.lora_rank,
+        lora_alpha=args.lora_alpha,
+        target_modules=target_modules,
+        lora_dropout=args.lora_dropout,
+        bias="none",
+        task_type=TaskType.FEATURE_EXTRACTION  # or TaskType.CAUSAL_LM, depending on your use case
+    )
+
+    # Wrap the model
+    lora_model = get_peft_model(controlnet_model, lora_config)
+
+    print("\n📈 Trainable parameter report:")
+    lora_model.print_trainable_parameters()
+
+    return lora_model
 
 def get_train_dataset(args, accelerator):
     dataset = None
