@@ -60,13 +60,52 @@ from diffusers.utils.hub_utils import load_or_create_model_card, populate_model_
 from diffusers.utils.import_utils import is_torch_npu_available, is_xformers_available
 from diffusers.utils.torch_utils import is_compiled_module
 
-from peft import LoraConfig
-from peft import get_peft_model
+from peft import get_peft_model, LoraConfig, TaskType
+import torch.nn as nn
+
+# TODO: Add LoRA config and wrap ControlNet
+# ========================
+def wrap_with_lora(controlnet_model):
+    print("🔍 Searching for linear modules to apply LoRA...\n")
+
+    # Auto-discover candidate target modules (usually Linear layers)
+    candidate_modules = []
+    for name, module in controlnet_model.named_modules():
+        if isinstance(module, nn.Linear):
+            candidate_modules.append(name)
+
+    print("📋 Found Linear layers:")
+    for name in candidate_modules:
+        print(f" - {name}")
+
+    # Optional: manually filter modules if needed
+    target_modules = [name for name in candidate_modules if
+                      "to_q" in name or "to_k" in name or "to_v" in name or "out_proj" in name]
+
+    print("\n✅ Using the following target modules for LoRA:")
+    for name in target_modules:
+        print(f" - {name}")
+
+    # Define the LoRA configuration
+    lora_config = LoraConfig(
+        r=16,
+        lora_alpha=32,
+        target_modules=target_modules,
+        lora_dropout=0.05,
+        bias="none",
+        task_type=TaskType.FEATURE_EXTRACTION  # or TaskType.CAUSAL_LM, depending on your use case
+    )
+
+    # Wrap the model
+    lora_model = get_peft_model(controlnet_model, lora_config)
+
+    print("\n📈 Trainable parameter report:")
+    lora_model.print_trainable_parameters()
+
+    return lora_model
 
 if is_wandb_available():
     import wandb
-
-import torch.nn as nn
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
 check_min_version("0.34.0.dev0")
@@ -87,12 +126,12 @@ def log_validation(
             args.pretrained_model_name_or_path,
             controlnet=flux_controlnet,
             transformer=flux_transformer,
-            torch_dtype=weight_dtype,
+            torch_dtype=torch.bfloat16,
         )
     else:
         flux_controlnet = FluxControlNetModel.from_pretrained(
             args.output_dir,
-            torch_dtype=weight_dtype,
+            torch_dtype=torch.bfloat16,
             variant=None,  # Disable variant since you're not using fp32.* files
             filename="diffusion_pytorch_model.safetensors",
         )
@@ -100,46 +139,8 @@ def log_validation(
             args.pretrained_model_name_or_path,
             controlnet=flux_controlnet,
             transformer=flux_transformer,
-            torch_dtype=weight_dtype,
+            torch_dtype=torch.bfloat16,
         )
-
-    #Lora
-    if args.use_lora:
-        flux_controlnet.config["model_type"] = "custom_flux"
-        flux_transformer.config["model_type"] = "custom_flux"
-
-        # Define target modules
-        common_target_modules = [
-            "to_q", "to_k", "to_v",
-            "add_q_proj", "add_k_proj", "add_v_proj",
-            "to_out.0", "to_add_out"
-        ]
-
-        # Define LoraConfig
-        lora_config_controlnet = LoraConfig(
-            r=args.lora_rank,
-            lora_alpha=args.lora_alpha,
-            lora_dropout=args.lora_dropout,
-            bias="none",
-            task_type="FEATURE_EXTRACTION",
-            target_modules=common_target_modules,
-        )
-
-        lora_config_transformer = LoraConfig(
-            r=args.lora_rank,
-            lora_alpha=args.lora_alpha,
-            lora_dropout=args.lora_dropout,
-            bias="none",
-            task_type="FEATURE_EXTRACTION",
-            target_modules=common_target_modules,
-        )
-        flux_controlnet = get_peft_model(flux_controlnet, lora_config_controlnet)
-        flux_controlnet.to(accelerator.device, dtype=weight_dtype)
-
-        flux_transformer = get_peft_model(flux_transformer, lora_config_transformer)
-        flux_transformer.to(accelerator.device, dtype=weight_dtype)
-        print("✅ LoRA layers added!")
-
 
     pipeline.to(accelerator.device)
     pipeline.set_progress_bar_config(disable=True)
@@ -291,12 +292,6 @@ Please adhere to the licensing terms as described [here](https://huggingface.co/
 
 def parse_args(input_args=None):
     parser = argparse.ArgumentParser(description="Simple example of a ControlNet training script.")
-    #Lora
-    parser.add_argument("--use_lora", action="store_true", help="Enable LoRA training")
-    parser.add_argument("--lora_rank", type=int, default=4)
-    parser.add_argument("--lora_alpha", type=int, default=32)
-    parser.add_argument("--lora_dropout", type=float, default=0.1)
-
     parser.add_argument(
         "--pretrained_model_name_or_path",
         type=str,
@@ -685,6 +680,11 @@ def parse_args(input_args=None):
         default=1.29,
         help="Scale of mode weighting scheme. Only effective when using the `'mode'` as the `weighting_scheme`.",
     )
+
+    parser.add_argument("--use_lora", action="store_true", help="Enable LoRA fine-tuning")
+    parser.add_argument("--lora_rank", type=int, default=4, help="LoRA rank (r)")
+    parser.add_argument("--lora_alpha", type=int, default=32, help="LoRA alpha")
+    parser.add_argument("--lora_dropout", type=float, default=0.1, help="LoRA dropout")
     parser.add_argument(
         "--enable_model_cpu_offload",
         action="store_true",
@@ -967,18 +967,9 @@ def main(args):
             num_layers=args.num_double_layers,
             num_single_layers=args.num_single_layers,
         )
+    if args.use_lora:
+        flux_controlnet = wrap_with_lora(flux_controlnet, args)
     logger.info("all models loaded successfully")
-
-    print("🔍 Linear layers in flux_controlnet:")
-    for name, module in flux_controlnet.named_modules():
-        if isinstance(module, torch.nn.Linear):
-            print(name)
-
-    print("/n next")
-    print("🔍 Linear layers in flux_controlnet:")
-    for name, module in flux_transformer.named_modules():
-        if isinstance(module, torch.nn.Linear):
-            print(name)
 
     noise_scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(
         args.pretrained_model_name_or_path,
@@ -1017,30 +1008,16 @@ def main(args):
         # create custom saving & loading hooks so that `accelerator.save_state(...)` serializes in a nice format
         def save_model_hook(models, weights, output_dir):
             if accelerator.is_main_process:
-                os.makedirs(output_dir, exist_ok=True)
+                i = len(weights) - 1
 
-                if args.use_lora:
-                    print("💾 Saving LoRA adapters in PEFT format...")
+                while len(weights) > 0:
+                    weights.pop()
+                    model = models[i]
 
-                    # Save LoRA-adapted ControlNet
-                    peft_controlnet = unwrap_model(flux_controlnet)
-                    controlnet_dir = os.path.join(output_dir, "controlnet_lora")
-                    peft_controlnet.save_pretrained(controlnet_dir)
+                    sub_dir = "flux_controlnet"
+                    model.save_pretrained(os.path.join(output_dir, sub_dir))
 
-                    # Save LoRA-adapted Transformer
-                    peft_transformer = unwrap_model(flux_transformer)
-                    transformer_dir = os.path.join(output_dir, "transformer_lora")
-                    peft_transformer.save_pretrained(transformer_dir)
-
-                    print(f"✅ LoRA adapters saved:\n- {controlnet_dir}\n- {transformer_dir}")
-
-                else:
-                    print("💾 Saving full models (no LoRA)...")
-                    for i, model in enumerate(models):
-                        sub_dir = os.path.join(output_dir, f"flux_controlnet_{i}")
-                        os.makedirs(sub_dir, exist_ok=True)
-                        model.save_pretrained(sub_dir)
-                    print("✅ Full models saved.")
+                    i -= 1
 
         def load_model_hook(models, input_dir):
             while len(models) > 0:
@@ -1224,6 +1201,9 @@ def main(args):
         num_cycles=args.lr_num_cycles,
         power=args.lr_power,
     )
+    # Disable AMP gradient scaling for bitsandbytes + fp16
+    if args.use_8bit_adam and accelerator.mixed_precision == "fp16":
+        accelerator.scaler = None
     # Prepare everything with our `accelerator`.
     flux_controlnet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
         flux_controlnet, optimizer, train_dataloader, lr_scheduler
@@ -1340,6 +1320,13 @@ def main(args):
                     control_latents.shape[2],
                     control_latents.shape[3],
                 )
+                #todo separare reduced da controlnet
+                # Proposed Change: Pass the conditioning_pixel_values directly (assuming they are 3-channel RGB after preprocessing)
+                control_image = batch["conditioning_pixel_values"].to(dtype=weight_dtype)
+                # Ensure it's 3 channels. The transforms already convert to RGB.
+                # If the input image is truly HED (grayscale), you might need to convert it to 3 channels here.
+                if control_image.shape[1] == 1:
+                    control_image = control_image.repeat(1, 3, 1, 1)  # Convert 1-channel to 3-channel by repeating
 
                 latent_image_ids = FluxControlNetPipeline._prepare_latent_image_ids(
                     batch_size=pixel_latents_tmp.shape[0],
@@ -1472,9 +1459,25 @@ def main(args):
             if global_step >= args.max_train_steps:
                 break
     # Create the pipeline using using the trained modules and save it.
+    #Not used
     accelerator.wait_for_everyone()
+
     if accelerator.is_main_process:
-        accelerator.save_state(args.output_dir)
+        print(f"\n💾 Saving LoRA adapter to: {args.output_dir}")
+        flux_controlnet = unwrap_model(flux_controlnet)
+        if args.use_lora:
+            flux_controlnet.save_pretrained(args.output_dir)
+        else:
+            save_weight_dtype = torch.float32
+            if args.save_weight_dtype == "fp16":
+                save_weight_dtype = torch.float16
+            elif args.save_weight_dtype == "bf16":
+                save_weight_dtype = torch.bfloat16
+            flux_controlnet.to(save_weight_dtype)
+            if args.save_weight_dtype != "fp32":
+                flux_controlnet.save_pretrained(args.output_dir, variant=args.save_weight_dtype)
+            else:
+                flux_controlnet.save_pretrained(args.output_dir)
         # Run a final round of validation.
         # Setting `vae`, `unet`, and `controlnet` to None to load automatically from `args.output_dir`.
         image_logs = None
