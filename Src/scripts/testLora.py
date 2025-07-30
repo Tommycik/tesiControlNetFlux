@@ -1,10 +1,14 @@
 import torch
-import os
 from huggingface_hub import login
-import torch
+from controlnet_aux import OpenposeDetector
+from diffusers import FluxControlPipeline, FluxTransformer2DModel
 from diffusers.utils import load_image
-from diffusers.pipelines.flux.pipeline_flux_controlnet import FluxControlNetPipeline
 from diffusers.models.controlnets.controlnet_flux import FluxControlNetModel
+from peft import PeftModel  # You need to have peft installed: pip install peft
+from diffusers.pipelines.flux.pipeline_flux_controlnet import FluxControlNetPipeline
+from PIL import Image
+import numpy as np
+import torch
 import cloudinary
 import cloudinary.uploader
 import uuid
@@ -17,32 +21,43 @@ CLOUDINARY_CLOUD_NAME = "dz9gbl0lo"
 CLOUDINARY_API_KEY = "172654867169949"
 CLOUDINARY_API_SECRET = "Vre4sIxwv3my0QP3Knuq7QID55M"
 
-cloudinary.config(
-    cloud_name=CLOUDINARY_CLOUD_NAME,
-    api_key=CLOUDINARY_API_KEY,
-    api_secret=CLOUDINARY_API_SECRET
-)
-#token hugginface
+
+# Login to Huggingface
 user_input = input("Enter token: ")
-login(token = user_input)
-base_model = 'black-forest-labs/FLUX.1-dev'
-controlnet_model = 'tommycik/controlFluxAlcolHed'
-controlnet = FluxControlNetModel.from_pretrained(controlnet_model, torch_dtype=torch.bfloat16,use_safetensors=True)
-pipe = FluxControlNetPipeline.from_pretrained(base_model, controlnet=controlnet, torch_dtype=torch.bfloat16)
+login(token=user_input)
+
+# Base and LoRA models on HF Hub
+base_controlnet_model = "InstantX/FLUX.1-dev-Controlnet-Canny"
+lora_weights_repo = "tommycik/controlFluxAlcolLoRA"
+base_flux_model = "black-forest-labs/FLUX.1-dev"
+
+# Load base ControlNet model
+controlnet = FluxControlNetModel.from_pretrained(base_controlnet_model, torch_dtype=torch.bfloat16)
+
+# Load LoRA weights and merge into base controlnet
+controlnet = PeftModel.from_pretrained(controlnet, lora_weights_repo)
+
+# Load the pipeline with the adapted ControlNet
+pipe = FluxControlNetPipeline.from_pretrained(base_flux_model, controlnet=controlnet, torch_dtype=torch.bfloat16)
 pipe.to("cuda")
 
-control_image = load_image("controlnet_dataset/imagesControlHed/sample_0000_hed.jpg")
+# Load control image
+control_image = load_image("controlnet_dataset/imagesControlCanny/sample_0000_canny.jpg")
+
 def main():
-    user_input = input("Enter prompt: ")
-    #prompt = "A tall glass with gemstones"
-    prompt = user_input
+    # Prompt input
+    user_prompt = input("Enter prompt: ")
+
+    # Generate image
     image = pipe(
-        prompt,
+        user_prompt,
         control_image=control_image,
         controlnet_conditioning_scale=0.2,
         num_inference_steps=50,
         guidance_scale=6.0,
     ).images[0]
+
+    # Save and display
     image.save("image.jpg")
     image.show()
     try:
@@ -60,7 +75,7 @@ def main():
         response = cloudinary.uploader.upload(
             img_byte_arr,
             public_id=public_id,
-            folder="flux_controlnet_hed_results", # Optional: specify a folder in Cloudinary
+            folder="flux_control_lora_results", # Optional: specify a folder in Cloudinary
             resource_type="image"
         )
 
@@ -70,6 +85,5 @@ def main():
         print(f"Error uploading to Cloudinary: {e}")
 
     print("Image pushed to Cloudinary successfully.")
-
 if __name__ == '__main__':
     main()

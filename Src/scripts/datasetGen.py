@@ -9,7 +9,7 @@ canny_dir = Path("content/canny")
 prompts_file = Path("content/captions_eng.csv")
 
 # Cartella output
-output_dir = Path("controlnet_dataset")
+output_dir = Path("../controlnet_dataset")
 output_dir.mkdir(parents=True, exist_ok=True)
 
 # Leggi i prompt
