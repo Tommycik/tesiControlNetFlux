@@ -8,6 +8,7 @@ from diffusers.pipelines.flux.pipeline_flux_controlnet import FluxControlNetPipe
 from diffusers.models.controlnets.controlnet_flux import FluxControlNetModel
 from io import BytesIO
 from datetime import datetime
+from transformers import BitsAndBytesConfig
 import cloudinary
 import cloudinary.uploader
 import torch
@@ -33,8 +34,20 @@ login(token=os.environ["HUGGINGFACE_TOKEN"])
 
 base_model = 'black-forest-labs/FLUX.1-dev'
 controlnet_model = args.controlnet_model
-controlnet = FluxControlNetModel.from_pretrained(controlnet_model, torch_dtype=torch.bfloat16, use_safetensors=True)
-pipe = FluxControlNetPipeline.from_pretrained(base_model, controlnet=controlnet, torch_dtype=torch.bfloat16)
+if(args.N4):
+    bnb_config = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.float16)
+
+    controlnet = FluxControlNetModel.from_pretrained(
+        controlnet_model,
+        quantization_config=bnb_config,
+        # device_map="auto" not supported
+    )
+    pipe = FluxControlNetPipeline.from_pretrained(base_model, controlnet=controlnet, torch_dtype=torch.float16)
+else:
+
+    controlnet = FluxControlNetModel.from_pretrained(controlnet_model, torch_dtype=torch.bfloat16, use_safetensors=True)
+    pipe = FluxControlNetPipeline.from_pretrained(base_model, controlnet=controlnet, torch_dtype=torch.bfloat16)
+
 pipe.to("cuda")
 
 control_img = f"controlnet_dataset/imagesControlHed/sample_0000_{args.controlnet_type}.jpg"
