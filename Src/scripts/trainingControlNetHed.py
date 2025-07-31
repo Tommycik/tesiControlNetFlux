@@ -42,6 +42,7 @@ def main():
         "--gradient_accumulation_steps", "4",
         "--gradient_checkpointing",
         "--use_8bit_adam",
+        "--hed",
         "--set_grads_to_none",
         "--push_to_hub",
         "--hub_model_id", "tommycik/controlFluxAlcolHed"

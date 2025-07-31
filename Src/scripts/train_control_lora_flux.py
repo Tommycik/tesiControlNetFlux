@@ -968,7 +968,7 @@ def main(args):
             num_single_layers=args.num_single_layers,
         )
     if args.use_lora:
-        flux_controlnet = wrap_with_lora(flux_controlnet, args)
+        flux_controlnet = wrap_with_lora(flux_controlnet)
     logger.info("all models loaded successfully")
 
     noise_scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(

@@ -428,6 +428,7 @@ def parse_args(input_args=None):
     parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
     parser.add_argument("--push_to_hub", action="store_true", help="Whether or not to push the model to the Hub.")
     parser.add_argument("--hub_token", type=str, default=None, help="The token to use to push to the Model Hub.")
+    parser.add_argument("--hed", action="store_true", help="Whether or not the model uses hed")#One file for canny and hed
     parser.add_argument(
         "--hub_model_id",
         type=str,
