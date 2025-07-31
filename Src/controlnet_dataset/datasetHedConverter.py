@@ -4,7 +4,7 @@ import json
 with open("dataset.json", "r", encoding="utf-8") as f:
     data = json.load(f)
 
-# Replace "imagesControlCanny/XYZ_canny.jpg" with "imagesControlHed/XYZ_hed.jpg"
+# Replace "imagesControlcanny/XYZ_canny.jpg" with "imagesControlhed/XYZ_hed.jpg"
 for entry in data:
     old_path = entry["condition_image"]
     filename = old_path.split("/")[-1].replace("_canny", "_hed")

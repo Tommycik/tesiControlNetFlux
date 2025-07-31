@@ -2,7 +2,7 @@ import os
 import subprocess
 
 input_dir = 'images'
-output_dir = 'imagesControlHed'
+output_dir = 'imagesControlhed'
 model = 'bsds500'  # You can change this if needed
 
 # Make sure the output directory exists
