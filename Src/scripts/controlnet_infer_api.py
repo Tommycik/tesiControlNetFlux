@@ -1,4 +1,3 @@
-# controlnet_infer_api.py
 import argparse
 import os
 
@@ -34,6 +33,7 @@ login(token=os.environ["HUGGINGFACE_TOKEN"])
 
 base_model = 'black-forest-labs/FLUX.1-dev'
 controlnet_model = args.controlnet_model
+
 if(args.N4):
     bnb_config = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.float16)
 
@@ -43,12 +43,14 @@ if(args.N4):
         # device_map="auto" not supported
     )
     pipe = FluxControlNetPipeline.from_pretrained(base_model, controlnet=controlnet, torch_dtype=torch.float16)
+
 else:
 
     controlnet = FluxControlNetModel.from_pretrained(controlnet_model, torch_dtype=torch.bfloat16, use_safetensors=True)
     pipe = FluxControlNetPipeline.from_pretrained(base_model, controlnet=controlnet, torch_dtype=torch.bfloat16)
 
 pipe.to("cuda")
+
 controlnet_type_capitalized = args.controlnet_type.capitalize()
 control_img = f"controlnet_dataset/imagesControl{controlnet_type_capitalized}/sample_0000_{args.controlnet_type}.jpg"
 control_image = load_image(control_img)
