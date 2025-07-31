@@ -729,7 +729,7 @@ def wrap_with_lora(controlnet_model):
         target_modules=target_modules,
         lora_dropout=args.lora_dropout,
         bias="none",
-        task_type=TaskType.FEATURE_EXTRACTION  # or TaskType.CAUSAL_LM, depending on your use case
+        #task_type=TaskType.FEATURE_EXTRACTION  # or TaskType.CAUSAL_LM, depending on your use case
     )
 
     # Wrap the model
