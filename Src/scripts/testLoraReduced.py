@@ -68,7 +68,7 @@ pipe = FluxControlNetPipeline.from_pretrained(base_flux_model, controlnet=contro
 pipe.to("cuda")
 
 # Load control image
-control_image = load_image("controlnet_dataset/imagesControlcanny/sample_0000_canny.jpg")
+control_image = load_image("controlnet_dataset/imagesControlCanny/sample_0000_canny.jpg")
 
 # Preprocess the control image to a tensor
 preprocess_transform = T.Compose([

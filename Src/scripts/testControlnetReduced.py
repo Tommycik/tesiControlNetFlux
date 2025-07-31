@@ -38,7 +38,7 @@ controlnet = FluxControlNetModel.from_pretrained(
 pipe = FluxControlNetPipeline.from_pretrained(base_model, controlnet=controlnet, torch_dtype=torch.float16)
 pipe.to("cuda")
 
-control_image = load_image("controlnet_dataset/imagesControlcanny/sample_0000_canny.jpg")
+control_image = load_image("controlnet_dataset/imagesControlCanny/sample_0000_canny.jpg")
 def main():
     user_input = input("Enter prompt: ")
     #prompt = "A tall glass with gemstones"
