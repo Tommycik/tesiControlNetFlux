@@ -67,6 +67,6 @@ result.save(img_byte_arr, format='JPEG')
 img_byte_arr.seek(0)
 timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 public_id = f"flux_controlnet_hed_results/{timestamp}_{uuid.uuid4().hex[:8]}"
-response = cloudinary.uploader.upload(img_byte_arr, public_id=public_id,folder=args.args.controlnet_model,
+response = cloudinary.uploader.upload(img_byte_arr, public_id=public_id,folder=args.controlnet_model,
             resource_type="image")
 print(response["secure_url"])
