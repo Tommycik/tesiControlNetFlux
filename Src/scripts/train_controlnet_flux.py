@@ -428,7 +428,7 @@ def parse_args(input_args=None):
     parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
     parser.add_argument("--push_to_hub", action="store_true", help="Whether or not to push the model to the Hub.")
     parser.add_argument("--hub_token", type=str, default=None, help="The token to use to push to the Model Hub.")
-    parser.add_argument("--hed", action="store_true", help="Whether or not the model uses hed")#One file for canny and hed
+    parser.add_argument("--hed", action="store_true", help="Whether or not the model uses hed")# One file for canny and hed
     parser.add_argument(
         "--hub_model_id",
         type=str,
@@ -1271,13 +1271,14 @@ def main(args):
                     control_latents.shape[2],
                     control_latents.shape[3],
                 )
-                #todo separare reduced da controlnet
-                # Proposed Change: Pass the conditioning_pixel_values directly (assuming they are 3-channel RGB after preprocessing)
-                control_image = batch["conditioning_pixel_values"].to(dtype=weight_dtype)
-                # Ensure it's 3 channels. The transforms already convert to RGB.
-                # If the input image is truly HED (grayscale), you might need to convert it to 3 channels here.
-                if control_image.shape[1] == 1:
-                    control_image = control_image.repeat(1, 3, 1, 1)  # Convert 1-channel to 3-channel by repeating
+
+                if args.hed:
+
+                    control_image = batch["conditioning_pixel_values"].to(dtype=weight_dtype)
+                    # Ensure it's 3 channels. The transforms already convert to RGB.
+                    # If the input image is truly HED (grayscale), you might need to convert it to 3 channels here.
+                    if control_image.shape[1] == 1:
+                        control_image = control_image.repeat(1, 3, 1, 1)  # Convert 1-channel to 3-channel by repeating
 
                 latent_image_ids = FluxControlNetPipeline._prepare_latent_image_ids(
                     batch_size=pixel_latents_tmp.shape[0],
