@@ -49,8 +49,8 @@ else:
     pipe = FluxControlNetPipeline.from_pretrained(base_model, controlnet=controlnet, torch_dtype=torch.bfloat16)
 
 pipe.to("cuda")
-#todo portare canny e hed in maiuscolo
-control_img = f"controlnet_dataset/imagesControl{args.controlnet_type}/sample_0000_{args.controlnet_type}.jpg"
+controlnet_type_capitalized = args.controlnet_type.capitalize()
+control_img = f"controlnet_dataset/imagesControl{controlnet_type_capitalized}/sample_0000_{args.controlnet_type}.jpg"
 control_image = load_image(control_img)
 
 result = pipe(
