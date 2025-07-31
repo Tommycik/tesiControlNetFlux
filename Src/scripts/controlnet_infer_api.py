@@ -50,7 +50,7 @@ else:
 
 pipe.to("cuda")
 
-control_img = f"../controlnet_dataset/imagesControl{args.controlnet_type}/sample_0000_{args.controlnet_type}.jpg"
+control_img = f"controlnet_dataset/imagesControl{args.controlnet_type}/sample_0000_{args.controlnet_type}.jpg"
 control_image = load_image(control_img)
 
 result = pipe(
