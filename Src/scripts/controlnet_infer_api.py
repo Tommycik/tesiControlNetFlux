@@ -27,6 +27,7 @@ parser.add_argument('--guidance', type=float, default=6.0)
 parser.add_argument('--controlnet_model', type=str,required=True, default='tommycik/controlFluxAlcol')
 parser.add_argument('--controlnet_type', type=str,required=True, default='canny')
 parser.add_argument('--N4', type=bool,required=True, default=False)
+parser.add_argument("--control_image", type=str, default=None)
 args = parser.parse_args()
 
 login(token=os.environ["HUGGINGFACE_TOKEN"])
@@ -52,7 +53,7 @@ else:
 pipe.to("cuda")
 
 controlnet_type_capitalized = args.controlnet_type.capitalize()
-control_img = f"controlnet_dataset/imagesControl{controlnet_type_capitalized}/sample_0000_{args.controlnet_type}.jpg"
+control_img = args.control_image or f"../controlnet_dataset/imagesControl{controlnet_type_capitalized}/sample_0000_{args.controlnet_type}.jpg"
 control_image = load_image(control_img)
 
 result = pipe(
