@@ -27,7 +27,7 @@ parser.add_argument('--guidance', type=float, default=6.0)
 parser.add_argument('--controlnet_model', type=str,required=True, default='tommycik/controlFluxAlcol')
 parser.add_argument('--controlnet_type', type=str,required=True, default='canny')
 parser.add_argument('--N4', type=bool,required=True, default=False)
-parser.add_argument("--control_image", type=str, default=None)
+parser.add_argument('--control_image', type=str, default=None)
 args = parser.parse_args()
 
 login(token=os.environ["HUGGINGFACE_TOKEN"])
@@ -69,7 +69,22 @@ img_byte_arr = BytesIO()
 result.save(img_byte_arr, format='JPEG')
 img_byte_arr.seek(0)
 timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-public_id = f"flux_controlnet_hed_results/{timestamp}_{uuid.uuid4().hex[:8]}"
-response = cloudinary.uploader.upload(img_byte_arr, public_id=public_id,folder=args.controlnet_model,
+unique_id = uuid.uuid4().hex[:8]
+base_public_id = f"{timestamp}_{unique_id}"
+response = cloudinary.uploader.upload(img_byte_arr, public_id=base_public_id, folder=f"{controlnet_model}_results",
             resource_type="image")
 print(response["secure_url"])
+
+#code to upload the control image
+control_img_byte_arr = BytesIO()
+control_image.save(control_img_byte_arr, format='JPEG')
+control_img_byte_arr.seek(0)
+
+control_public_id = f"{base_public_id}_control"
+response_control = cloudinary.uploader.upload(
+    control_img_byte_arr,
+    public_id=control_public_id,
+    folder=f"{controlnet_model}_results",
+    resource_type="image"
+)
+print(f"Control Image URL: {response_control['secure_url']}")
