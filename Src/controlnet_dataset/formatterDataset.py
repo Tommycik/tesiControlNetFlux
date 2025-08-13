@@ -2,7 +2,7 @@ import json
 
 #aggiorna la psozione dei file
 # Percorso del file JSON
-json_path = "dataset.json"
+json_path = "dataset_canny.json"
 
 # Carica il file JSON
 with open(json_path, "r") as f:

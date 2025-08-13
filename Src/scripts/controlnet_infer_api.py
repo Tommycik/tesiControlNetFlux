@@ -26,7 +26,7 @@ parser.add_argument('--steps', type=int, default=50)
 parser.add_argument('--guidance', type=float, default=6.0)
 parser.add_argument('--controlnet_model', type=str,required=True, default='tommycik/controlFluxAlcol')
 parser.add_argument('--controlnet_type', type=str,required=True, default='canny')
-parser.add_argument('--N4', type=bool,required=True, default=False)
+parser.add_argument('--N4', type=bool, required=True, default=False)
 parser.add_argument('--control_image', type=str, default=None)
 args = parser.parse_args()
 

@@ -1,56 +1,69 @@
 from huggingface_hub import login
 from datasets import load_dataset
+import argparse
 import os
 import subprocess
-from safetensors.torch import load_file
 import torch
 import shutil
 
-#login(token = "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")
+parser = argparse.ArgumentParser()
+parser.add_argument('--prompt', type=str, required=True, default='transparent glass on white background, the bottom part of the glass presents light grooves')
+parser.add_argument('--scale', type=float, default=0.2)
+parser.add_argument('--steps', type=int, default=1000)
+parser.add_argument('--gradient_accumulation_steps', type=int, default=4)
+parser.add_argument('--train_batch_size', type=int, default=2)
+parser.add_argument('--resolution', type=int, default=512)
+parser.add_argument('--checkpointing_steps', type=int, default=250)
+parser.add_argument('--validation_steps', type=int, default=125)
+parser.add_argument('--mixed_precision', type=str, default='bf16')
+parser.add_argument('--controlnet_model', type=str,required=True)
+parser.add_argument('--controlnet_type', type=str,required=True)
+parser.add_argument('--learning_rate', type=str, default='2e-6')
+parser.add_argument('--N4', type=bool, default=False)
+parser.add_argument('--hub_model_id', required=True, type=str)
+parser.add_argument('--control_image', type=str, default=None)
+args = parser.parse_args()
+
+login(token=os.environ["HUGGINGFACE_TOKEN"])
 def main():
-    #token hugginface da tastiera
-    user_input = input("Enter token: ")
-    login(token = user_input)
-    # Percorsi dataset e output
+
     output_dir = "model"
-    #dataset = load_dataset("./controlnet_dataset/dataset.py", data_dir="./controlnet_dataset")
-    #print(dataset["train"].column_names)
-    # Nome base modello
-    pretrained_model = "black-forest-labs/FLUX.1-dev"
-    controlnet_pretrained = 'InstantX/FLUX.1-dev-Controlnet-Canny'
-    # Script ufficiale diffusers per il training
-    training_script = "train_controlnet_flux.py"
-        # Comando per chiamare lo script di training
-    command = [
+    base_model = 'black-forest-labs/FLUX.1-dev'
+    controlnet_model = args.controlnet_model
+    training_script = "train_controlnet_flux.py"  #todo passare da app.py
+    control_img = args.control_image or f"controlnet_dataset/images/sample_0000.jpg"
+    training_command = [
         "accelerate", "launch", training_script,
-        "--pretrained_model_name_or_path", pretrained_model,
-        "--controlnet_model_name_or_path", controlnet_pretrained,
+        "--pretrained_model_name_or_path", base_model,
+        "--controlnet_model_name_or_path", controlnet_model,
         "--output_dir", output_dir,
         "--conditioning_image_column", "condition_image",
         "--image_column", "image",
         "--caption_column", "prompt",
-        "--jsonl_for_train", "./controlnet_dataset/dataset.jsonl",
-        "--resolution", "512",
-        "--learning_rate", "2e-6",
-        "--max_train_steps", "1000",
-        "--checkpointing_steps", "250",
-        "--validation_steps", "125",
-        "--mixed_precision", "bf16",
-        "--validation_image", "controlnet_dataset/sample_0000.jpg",
-        "--validation_prompt", "transparent glass on white background, the bottom part of the glass presents light grooves ",
-        "--train_batch_size", "2",
-        "--gradient_accumulation_steps", "4",
+        f"--jsonl_for_train", f"./controlnet_dataset/dataset_{args.controlnet_type}.jsonl",
+        "--resolution", args.resolution,
+        "--learning_rate", args.learning_rate,
+        "--max_train_steps", args.steps,
+        "--checkpointing_steps", args.checkpointing_steps,
+        "--validation_steps", args.validation_steps,
+        "--mixed_precision", args.mixed_precision,
+        "--validation_image", control_img,
+        "--validation_prompt", args.prompt,
+        "--train_batch_size", args.train_batch_size,
+        "--gradient_accumulation_steps", args.gradient_accumulation_steps,
         "--gradient_checkpointing",
         "--use_8bit_adam",
         "--set_grads_to_none",
         "--push_to_hub",
-        "--hub_model_id", "tommycik/controlFluxAlcol"
+        "--controlnet_type", args.controlnet_type,
+        "--N4", args.N4,
+        "--hub_model_id", args.hub_model_id
     ]
 
     print("Esecuzione comando Accelerate:")
-    print(" ".join(command))
+    print(" ".join(training_command))
 
-    result = subprocess.run(command)
+    subprocess.run(training_command)
     
 
 if __name__ == "__main__":

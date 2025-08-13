@@ -8,7 +8,7 @@ from torch.utils.data import Dataset
 class MyDataset(Dataset):
     def __init__(self):
         self.data = []
-        with open('../controlnet_dataset/dataset.json', 'rt') as f:
+        with open('../controlnet_dataset/dataset_canny.json', 'rt') as f:
             for line in f:
                 self.data.append(json.loads(line))
 

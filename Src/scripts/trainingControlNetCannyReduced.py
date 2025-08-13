@@ -29,7 +29,7 @@ def main():
         "--conditioning_image_column", "condition_image",
         "--image_column", "image",
         "--caption_column", "prompt",
-        "--jsonl_for_train", "./controlnet_dataset/dataset.jsonl",
+        "--jsonl_for_train", "./controlnet_dataset/dataset_canny.jsonl",
         "--resolution", "256",
         "--learning_rate", "2e-6",
         "--max_train_steps", "1000",

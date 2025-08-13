@@ -45,7 +45,7 @@ for idx, (img_path, canny_path, prompt) in tqdm(enumerate(zip(image_files, canny
     })
 
 # Salva il file JSON con tutte le associazioni
-with open(output_dir / "dataset.json", "w", encoding="utf-8") as f:
+with open(output_dir / "dataset_canny.json", "w", encoding="utf-8") as f:
     json.dump(dataset, f, indent=4)
 
 print(f"✅ Dataset creato in: {output_dir}")

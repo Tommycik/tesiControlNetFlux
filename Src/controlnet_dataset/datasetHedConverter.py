@@ -1,7 +1,7 @@
 import json
 
 # Load the existing JSON
-with open("dataset.json", "r", encoding="utf-8") as f:
+with open("dataset_canny.json", "r", encoding="utf-8") as f:
     data = json.load(f)
 
 # Replace "imagesControlCanny/XYZ_canny.jpg" with "imagesControlHed/XYZ_hed.jpg"
