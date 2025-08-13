@@ -25,46 +25,41 @@ parser.add_argument('--control_image', type=str, default=None)
 args = parser.parse_args()
 
 login(token=os.environ["HUGGINGFACE_TOKEN"])
-def main():
 
-    output_dir = "model"
-    base_model = 'black-forest-labs/FLUX.1-dev'
-    controlnet_model = args.controlnet_model
-    training_script = "train_controlnet_flux.py"  #todo passare da app.py
-    control_img = args.control_image or f"controlnet_dataset/images/sample_0000.jpg"
-    training_command = [
-        "accelerate", "launch", training_script,
-        "--pretrained_model_name_or_path", base_model,
-        "--controlnet_model_name_or_path", controlnet_model,
-        "--output_dir", output_dir,
-        "--conditioning_image_column", "condition_image",
-        "--image_column", "image",
-        "--caption_column", "prompt",
-        f"--jsonl_for_train", f"./controlnet_dataset/dataset_{args.controlnet_type}.jsonl",
-        "--resolution", args.resolution,
-        "--learning_rate", args.learning_rate,
-        "--max_train_steps", args.steps,
-        "--checkpointing_steps", args.checkpointing_steps,
-        "--validation_steps", args.validation_steps,
-        "--mixed_precision", args.mixed_precision,
-        "--validation_image", control_img,
-        "--validation_prompt", args.prompt,
-        "--train_batch_size", args.train_batch_size,
-        "--gradient_accumulation_steps", args.gradient_accumulation_steps,
-        "--gradient_checkpointing",
-        "--use_8bit_adam",
-        "--set_grads_to_none",
-        "--push_to_hub",
-        "--controlnet_type", args.controlnet_type,
-        "--N4", args.N4,
-        "--hub_model_id", args.hub_model_id
-    ]
+output_dir = "model"
+base_model = 'black-forest-labs/FLUX.1-dev'
+controlnet_model = args.controlnet_model
+training_script = "train_controlnet_flux.py"  #todo passare da app.py
+control_img = args.control_image or f"controlnet_dataset/images/sample_0000.jpg"
+training_command = [
+    "accelerate", "launch", training_script,
+    "--pretrained_model_name_or_path", base_model,
+    "--controlnet_model_name_or_path", controlnet_model,
+    "--output_dir", output_dir,
+    "--conditioning_image_column", "condition_image",
+    "--image_column", "image",
+    "--caption_column", "prompt",
+    f"--jsonl_for_train", f"./controlnet_dataset/dataset_{args.controlnet_type}.jsonl",
+    "--resolution", args.resolution,
+    "--learning_rate", args.learning_rate,
+    "--max_train_steps", args.steps,
+    "--checkpointing_steps", args.checkpointing_steps,
+    "--validation_steps", args.validation_steps,
+    "--mixed_precision", args.mixed_precision,
+    "--validation_image", control_img,
+    "--validation_prompt", args.prompt,
+    "--train_batch_size", args.train_batch_size,
+    "--gradient_accumulation_steps", args.gradient_accumulation_steps,
+    "--gradient_checkpointing",
+    "--use_8bit_adam",
+    "--set_grads_to_none",
+    "--push_to_hub",
+    "--controlnet_type", args.controlnet_type,
+    "--N4", args.N4,
+    "--hub_model_id", args.hub_model_id
+]
 
-    print("Esecuzione comando Accelerate:")
-    print(" ".join(training_command))
+print("Esecuzione comando Accelerate:")
+print(" ".join(training_command))
 
-    subprocess.run(training_command)
-    
-
-if __name__ == "__main__":
-    main()
+subprocess.run(training_command)
