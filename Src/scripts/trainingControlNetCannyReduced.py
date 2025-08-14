@@ -19,7 +19,7 @@ def main():
     pretrained_model = "black-forest-labs/FLUX.1-dev"
     controlnet_pretrained = 'InstantX/FLUX.1-dev-Controlnet-Canny'
     # Script ufficiale diffusers per il training
-    training_script = "train_controlnet_fluxReduced.py"
+    training_script = "train_controlnet_flux.py"
         # Comando per chiamare lo script di training
     command = [
         "accelerate", "launch", training_script,

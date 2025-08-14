@@ -60,6 +60,15 @@ from diffusers.utils.hub_utils import load_or_create_model_card, populate_model_
 from diffusers.utils.import_utils import is_torch_npu_available, is_xformers_available
 from diffusers.utils.torch_utils import is_compiled_module
 
+try:
+    import bitsandbytes as bnb
+except ImportError:
+    raise ImportError("To use N4 quantization, install bitsandbytes: `pip install bitsandbytes`.")
+
+from transformers import BitsAndBytesConfig
+
+#N4
+bnb_config = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.float16)#todo verificare compatibilità con più mixed precisions
 
 if is_wandb_available():
     import wandb
@@ -83,12 +92,13 @@ def log_validation(
             args.pretrained_model_name_or_path,
             controlnet=flux_controlnet,
             transformer=flux_transformer,
-            torch_dtype=torch.bfloat16,
+            torch_dtype=weight_dtype,
         )
     else:
         flux_controlnet = FluxControlNetModel.from_pretrained(
             args.output_dir,
-            torch_dtype=torch.bfloat16,
+            quantization_config=bnb_config,#N4
+            #device_map="auto", creates error need to manually define _no_split_modules
             variant=None,  # Disable variant since you're not using fp32.* files
             filename="diffusion_pytorch_model.safetensors",
         )
@@ -96,7 +106,7 @@ def log_validation(
             args.pretrained_model_name_or_path,
             controlnet=flux_controlnet,
             transformer=flux_transformer,
-            torch_dtype=torch.bfloat16,
+            torch_dtype=weight_dtype,
         )
 
     pipeline.to(accelerator.device)
@@ -830,13 +840,22 @@ def main(args):
         )
 
     accelerator_project_config = ProjectConfiguration(project_dir=args.output_dir, logging_dir=str(logging_out_dir))
-
-    accelerator = Accelerator(
+    if args.N4 == False:
+        accelerator = Accelerator(
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         mixed_precision=args.mixed_precision,
         log_with=args.report_to,
         project_config=accelerator_project_config,
-    )
+        )
+    else:
+        # If using bitsandbytes 8bit optimizer with fp16, disable gradient scaling
+        kwargs = {
+            "gradient_accumulation_steps": args.gradient_accumulation_steps,
+            "mixed_precision": args.mixed_precision,
+            "log_with": args.report_to,
+            "project_config": accelerator_project_config,
+        }
+        accelerator = Accelerator(**kwargs)
 
     # Disable AMP for MPS. A technique for accelerating machine learning computations on iOS and macOS devices.
     if torch.backends.mps.is_available():
@@ -901,25 +920,55 @@ def main(args):
         revision=args.revision,
         variant=None,
     )
-    flux_transformer = FluxTransformer2DModel.from_pretrained(
-        args.pretrained_model_name_or_path,
-        subfolder="transformer",
-        revision=args.revision,
-        variant=None,
-    )
-    if args.controlnet_model_name_or_path:
-        logger.info("Loading existing controlnet weights")
-        flux_controlnet = FluxControlNetModel.from_pretrained(args.controlnet_model_name_or_path)
-    else:
-        logger.info("Initializing controlnet weights from transformer")
-        # we can define the num_layers, num_single_layers,
-        flux_controlnet = FluxControlNetModel.from_transformer(
-            flux_transformer,
-            attention_head_dim=flux_transformer.config["attention_head_dim"],
-            num_attention_heads=flux_transformer.config["num_attention_heads"],
-            num_layers=args.num_double_layers,
-            num_single_layers=args.num_single_layers,
+    if args.N4:
+        flux_transformer = FluxTransformer2DModel.from_pretrained(
+            args.pretrained_model_name_or_path,
+            subfolder="transformer",
+            revision=args.revision,
+            variant=None,
+            quantization_config=bnb_config,
+            # device_map="auto", creates error need to manually define _no_split_modules
         )
+
+        if args.controlnet_model_name_or_path:
+            logger.info("Loading existing controlnet weights")
+            flux_controlnet = FluxControlNetModel.from_pretrained(
+                args.controlnet_model_name_or_path,
+                quantization_config=bnb_config,  # N4
+                # device_map="auto", creates error need to manually define _no_split_modules
+            )
+        else:
+            logger.info("Initializing controlnet weights from transformer")
+            # we can define the num_layers, num_single_layers,
+            flux_controlnet = FluxControlNetModel.from_transformer(
+                flux_transformer,
+                attention_head_dim=flux_transformer.config["attention_head_dim"],
+                num_attention_heads=flux_transformer.config["num_attention_heads"],
+                num_layers=args.num_double_layers,
+                num_single_layers=args.num_single_layers,
+            )
+    else:
+        flux_transformer = FluxTransformer2DModel.from_pretrained(
+            args.pretrained_model_name_or_path,
+            subfolder="transformer",
+            revision=args.revision,
+            variant=None,
+        )
+
+        if args.controlnet_model_name_or_path:
+            logger.info("Loading existing controlnet weights")
+            flux_controlnet = FluxControlNetModel.from_pretrained(args.controlnet_model_name_or_path)
+        else:
+            logger.info("Initializing controlnet weights from transformer")
+            # we can define the num_layers, num_single_layers,
+            flux_controlnet = FluxControlNetModel.from_transformer(
+                flux_transformer,
+                attention_head_dim=flux_transformer.config["attention_head_dim"],
+                num_attention_heads=flux_transformer.config["num_attention_heads"],
+                num_layers=args.num_double_layers,
+                num_single_layers=args.num_single_layers,
+            )
+
     logger.info("all models loaded successfully")
 
     noise_scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(
@@ -1016,7 +1065,8 @@ def main(args):
         " doing mixed precision training, copy of the weights should still be float32."
     )
 
-    if unwrap_model(flux_controlnet).dtype != torch.float32:
+    #Using N4 will give error
+    if unwrap_model(flux_controlnet).dtype != torch.float32 & args.N4==False:
         raise ValueError(
             f"Controlnet loaded as datatype {unwrap_model(flux_controlnet).dtype}. {low_precision_error_string}"
         )
@@ -1076,7 +1126,10 @@ def main(args):
         weight_dtype = torch.bfloat16
 
     vae.to(accelerator.device, dtype=weight_dtype)
-    flux_transformer.to(accelerator.device, dtype=weight_dtype)
+    if args.N4:
+        flux_transformer.to(accelerator.device)#, dtype=weight_dtype tolto perché modello quantizzato
+    else:
+        flux_transformer.to(accelerator.device, dtype=weight_dtype)
 
     def compute_embeddings(batch, proportion_empty_prompts, flux_controlnet_pipeline, weight_dtype, is_train=True):
         prompt_batch = batch[args.caption_column]
@@ -1152,9 +1205,10 @@ def main(args):
         num_cycles=args.lr_num_cycles,
         power=args.lr_power,
     )
-    # Disable AMP gradient scaling for bitsandbytes + fp16
-    if args.use_8bit_adam and accelerator.mixed_precision == "fp16":
-        accelerator.scaler = None
+    if args.N4==False:
+        # Disable AMP gradient scaling for bitsandbytes + fp16
+        if args.use_8bit_adam and accelerator.mixed_precision == "fp16":
+            accelerator.scaler = None
     # Prepare everything with our `accelerator`.
     flux_controlnet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
         flux_controlnet, optimizer, train_dataloader, lr_scheduler
@@ -1414,14 +1468,19 @@ def main(args):
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
         flux_controlnet = unwrap_model(flux_controlnet)
-        save_weight_dtype = torch.float32
-        if args.save_weight_dtype == "fp16":
-            save_weight_dtype = torch.float16
-        elif args.save_weight_dtype == "bf16":
-            save_weight_dtype = torch.bfloat16
-        flux_controlnet.to(save_weight_dtype)
-        if args.save_weight_dtype != "fp32":
-            flux_controlnet.save_pretrained(args.output_dir, variant=args.save_weight_dtype)
+        is_quantized = getattr(flux_controlnet, 'is_loaded_in_4bit', False)
+
+        if not is_quantized:
+            save_weight_dtype = torch.float32
+            if args.save_weight_dtype == "fp16":
+                save_weight_dtype = torch.float16
+            elif args.save_weight_dtype == "bf16":
+                save_weight_dtype = torch.bfloat16
+            flux_controlnet.to(save_weight_dtype)
+            if args.save_weight_dtype != "fp32":
+                flux_controlnet.save_pretrained(args.output_dir, variant=args.save_weight_dtype)
+            else:
+                flux_controlnet.save_pretrained(args.output_dir)
         else:
             flux_controlnet.save_pretrained(args.output_dir)
         # Run a final round of validation.

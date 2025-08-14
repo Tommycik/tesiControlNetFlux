@@ -8,7 +8,6 @@ import shutil
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--prompt', type=str, required=True, default='transparent glass on white background, the bottom part of the glass presents light grooves')
-parser.add_argument('--scale', type=float, default=0.2)
 parser.add_argument('--steps', type=int, default=1000)
 parser.add_argument('--gradient_accumulation_steps', type=int, default=4)
 parser.add_argument('--train_batch_size', type=int, default=2)
@@ -29,7 +28,7 @@ login(token=os.environ["HUGGINGFACE_TOKEN"])
 output_dir = "model"
 base_model = 'black-forest-labs/FLUX.1-dev'
 controlnet_model = args.controlnet_model
-training_script = "train_controlnet_flux.py"  #todo passare da app.py
+training_script = "train_controlnet_flux.py"
 control_img = args.control_image or f"controlnet_dataset/images/sample_0000.jpg"
 training_command = [
     "accelerate", "launch", training_script,
@@ -39,7 +38,7 @@ training_command = [
     "--conditioning_image_column", "condition_image",
     "--image_column", "image",
     "--caption_column", "prompt",
-    f"--jsonl_for_train", f"./controlnet_dataset/dataset_{args.controlnet_type}.jsonl",
+    f"--jsonl_for_train", f"./controlnet_dataset/dataset_{args.controlnet_type.lower()}.jsonl",
     "--resolution", args.resolution,
     "--learning_rate", args.learning_rate,
     "--max_train_steps", args.steps,
@@ -54,7 +53,7 @@ training_command = [
     "--use_8bit_adam",
     "--set_grads_to_none",
     "--push_to_hub",
-    "--controlnet_type", args.controlnet_type,
+    "--controlnet_type", args.controlnet_type.lower(),
     "--N4", args.N4,
     "--hub_model_id", args.hub_model_id
 ]
