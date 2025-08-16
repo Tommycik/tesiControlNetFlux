@@ -20,7 +20,7 @@ parser.add_argument('--controlnet_type', type=str,required=True)
 parser.add_argument('--learning_rate', type=str, default='2e-6')
 parser.add_argument('--N4', type=bool, default=False)
 parser.add_argument('--hub_model_id', required=True, type=str)
-parser.add_argument('--control_image', type=str, default=None)
+parser.add_argument('--validation_image', type=str, default=None)
 args = parser.parse_args()
 
 login(token=os.environ["HUGGINGFACE_TOKEN"])
@@ -29,7 +29,7 @@ output_dir = "model"
 base_model = 'black-forest-labs/FLUX.1-dev'
 controlnet_model = args.controlnet_model
 training_script = "train_controlnet_flux.py"
-control_img = args.control_image or f"controlnet_dataset/images/sample_0000.jpg"
+control_img = args.validation_image or f"controlnet_dataset/images/sample_0000.jpg"
 training_command = [
     "accelerate", "launch", training_script,
     "--pretrained_model_name_or_path", base_model,
