@@ -87,4 +87,12 @@ response_control = cloudinary.uploader.upload(
     folder=f"{controlnet_model}_results",
     resource_type="image"
 )
-print(f"Control Image URL: {response_control['secure_url']}")
+import json
+import sys
+
+result = {
+    "image_url": response["secure_url"],   # cloudinary URL of generated image
+    "control_image_url": response_control["secure_url"] if response_control["secure_url"] else None
+}
+print(json.dumps(result))
+sys.stdout.flush()
