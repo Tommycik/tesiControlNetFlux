@@ -87,3 +87,4 @@ response_control = cloudinary.uploader.upload(
     folder=f"{controlnet_model}_results",
     resource_type="image"
 )
+#todo mostrarla accanto a immagine generata
