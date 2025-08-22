@@ -75,7 +75,7 @@ response = cloudinary.uploader.upload(img_byte_arr, public_id=base_public_id, fo
             resource_type="image")
 print(response["secure_url"])
 
-#code to upload the control image
+#Upload the control image
 control_img_byte_arr = BytesIO()
 control_image.save(control_img_byte_arr, format='JPEG')
 control_img_byte_arr.seek(0)
@@ -87,12 +87,3 @@ response_control = cloudinary.uploader.upload(
     folder=f"{controlnet_model}_results",
     resource_type="image"
 )
-import json
-import sys
-
-result = {
-    "image_url": response["secure_url"],   # cloudinary URL of generated image
-    "control_image_url": response_control["secure_url"] if response_control["secure_url"] else None
-}
-print(json.dumps(result))
-sys.stdout.flush()
