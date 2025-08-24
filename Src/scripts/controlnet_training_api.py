@@ -59,6 +59,11 @@ training_command = [
 ]
 
 print("Esecuzione comando Accelerate:")
-print(" ".join(training_command))
+print(" ".join(training_command), flush=True)
 
-subprocess.run(training_command)
+process = subprocess.Popen(training_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+
+for line in iter(process.stdout.readline, ''):
+    print(line, flush=True)  # ensures SSH sees progress
+
+process.wait()
