@@ -439,6 +439,7 @@ def parse_args(input_args=None):
     parser.add_argument("--push_to_hub", action="store_true", help="Whether or not to push the model to the Hub.")
     parser.add_argument("--hub_token", type=str, default=None, help="The token to use to push to the Model Hub.")
     parser.add_argument("--controlnet_type", type=str, default=None, help="Which control image type is used")
+    parser.add_argument('--N4', type=bool, default=False)
     parser.add_argument(
         "--hub_model_id",
         type=str,
