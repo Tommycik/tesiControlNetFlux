@@ -1,3 +1,5 @@
+import sys
+
 from huggingface_hub import login
 from datasets import load_dataset
 import argparse
@@ -71,4 +73,7 @@ process = subprocess.Popen(
 for line in iter(process.stdout.readline, ''):
     print(line, flush=True)  # flush so logs reach Flask/SSH
 
-process.wait()
+ret = process.wait()
+if ret != 0:
+    print(f"[ERROR] Training failed with exit code {ret}", flush=True)
+    sys.exit(ret)
