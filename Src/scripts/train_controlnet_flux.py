@@ -95,13 +95,22 @@ def log_validation(
             torch_dtype=weight_dtype,
         )
     else:
-        flux_controlnet = FluxControlNetModel.from_pretrained(
-            args.output_dir,
-            quantization_config=bnb_config,#N4
-            #device_map="auto", creates error need to manually define _no_split_modules
-            variant=None,  # Disable variant since you're not using fp32.* files
-            filename="diffusion_pytorch_model.safetensors",
-        )
+        if args.N4:
+            flux_controlnet = FluxControlNetModel.from_pretrained(
+                args.output_dir,
+                quantization_config=bnb_config,  # N4
+                # device_map="auto", creates error need to manually define _no_split_modules
+                variant=None,  # Disable variant since you're not using fp32.* files
+                filename="diffusion_pytorch_model.safetensors",
+            )
+        else:
+            flux_controlnet = FluxControlNetModel.from_pretrained(
+                args.output_dir,
+                torch_dtype=weight_dtype,
+                # device_map="auto", creates error need to manually define _no_split_modules
+                variant=None,  # Disable variant since you're not using fp32.* files
+                filename="diffusion_pytorch_model.safetensors",
+            )
         pipeline = FluxControlNetPipeline.from_pretrained(
             args.pretrained_model_name_or_path,
             controlnet=flux_controlnet,
