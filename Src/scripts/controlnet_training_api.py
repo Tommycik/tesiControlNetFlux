@@ -59,11 +59,16 @@ training_command = [
 ]
 
 print("Esecuzione comando Accelerate:")
-print(" ".join(training_command), flush=True)
+print(" ".join(map(str, training_command)), flush=True)
 
-process = subprocess.Popen(training_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+process = subprocess.Popen(
+    list(map(str, training_command)),
+    stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT,
+    text=True
+)
 
 for line in iter(process.stdout.readline, ''):
-    print(line, flush=True)  # ensures SSH sees progress
+    print(line, flush=True)  # flush so logs reach Flask/SSH
 
 process.wait()
