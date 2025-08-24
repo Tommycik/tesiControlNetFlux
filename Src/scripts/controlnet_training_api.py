@@ -7,7 +7,7 @@ import torch
 import shutil
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--prompt', type=str, required=True, default='transparent glass on white background, the bottom part of the glass presents light grooves')
+parser.add_argument('--prompt', type=str, default='transparent glass on white background, the bottom part of the glass presents light grooves')
 parser.add_argument('--steps', type=int, default=1000)
 parser.add_argument('--gradient_accumulation_steps', type=int, default=4)
 parser.add_argument('--train_batch_size', type=int, default=2)
