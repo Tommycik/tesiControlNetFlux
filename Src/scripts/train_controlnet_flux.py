@@ -1067,7 +1067,7 @@ def main(args):
     )
 
     #Using N4 will give error
-    if unwrap_model(flux_controlnet).dtype != torch.float32 & args.N4==False:
+    if (unwrap_model(flux_controlnet).dtype != torch.float32) & (args.N4==False):
         raise ValueError(
             f"Controlnet loaded as datatype {unwrap_model(flux_controlnet).dtype}. {low_precision_error_string}"
         )
