@@ -28,7 +28,7 @@ login(token=os.environ["HUGGINGFACE_TOKEN"])
 output_dir = "model"
 base_model = 'black-forest-labs/FLUX.1-dev'
 controlnet_model = args.controlnet_model
-training_script = "train_controlnet_flux.py"
+training_script = "scripts/train_controlnet_flux.py"
 control_img = args.validation_image or f"controlnet_dataset/images/sample_0000.jpg"
 training_command = [
     "accelerate", "launch", training_script,
