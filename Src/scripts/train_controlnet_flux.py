@@ -1327,7 +1327,7 @@ def main(args):
                     control_latents.shape[3],
                 )
 
-                if args.controlnet_typelower() == "hed":
+                if args.controlnet_type.lower() == "hed":
 
                     control_image = batch["conditioning_pixel_values"].to(dtype=weight_dtype)
                     # Ensure it's 3 channels. The transforms already convert to RGB.
