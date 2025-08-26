@@ -77,3 +77,5 @@ ret = process.wait()
 if ret != 0:
     print(f"[ERROR] Training failed with exit code {ret}", flush=True)
     sys.exit(ret)
+final_url = f"http://done/{args.hub_model_id}"
+print(final_url, flush=True)
