@@ -1421,7 +1421,18 @@ def main(args):
 
                 if accelerator.sync_gradients:
                     params_to_clip = flux_controlnet.parameters()
-                    accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
+                    try:
+                        # Normal path: let accelerate handle unscale+clip
+                        accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
+                    except ValueError as e:
+                        if "Attempting to unscale FP16 gradients" in str(e):
+                            logger.warning(
+                                "Detected N4 + fp16 AMP conflict during grad clipping. "
+                                "Falling back to torch.nn.utils.clip_grad_norm_ without unscaling."
+                            )
+                            torch.nn.utils.clip_grad_norm_(params_to_clip, args.max_grad_norm)
+                        else:
+                            raise
                 optimizer.step()
                 lr_scheduler.step()
                 optimizer.zero_grad(set_to_none=args.set_grads_to_none)
