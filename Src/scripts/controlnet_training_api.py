@@ -78,4 +78,4 @@ if ret != 0:
     print(f"[ERROR] Training failed with exit code {ret}", flush=True)
     sys.exit(ret)
 
-print("[TRAINING_COMPLETE]", flush=True)
+print("\n[TRAINING_COMPLETE]\n", flush=True)
