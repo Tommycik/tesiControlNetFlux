@@ -55,8 +55,6 @@ pipe.to("cuda")
 controlnet_type_capitalized = args.controlnet_type.capitalize()
 from pathlib import Path
 
-repo_root = Path("/workspace/tesiControlNetFlux")
-control_img = repo_root / f"controlnet_dataset/imagesControl{controlnet_type_capitalized}/sample_0000_{args.controlnet_type}.jpg"
 control_img = args.control_image or f"controlnet_dataset/imagesControl{controlnet_type_capitalized}/sample_0000_{args.controlnet_type}.jpg"
 control_image = load_image(control_img)
 
