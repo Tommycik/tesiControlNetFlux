@@ -40,7 +40,7 @@ training_command = [
     "--conditioning_image_column", "condition_image",
     "--image_column", "image",
     "--caption_column", "prompt",
-    f"--jsonl_for_train", f"./controlnet_dataset/dataset_{args.controlnet_type.lower()}.jsonl",
+    f"--jsonl_for_train", f"../controlnet_dataset/dataset_{args.controlnet_type.lower()}.jsonl",
     "--resolution", args.resolution,
     "--learning_rate", args.learning_rate,
     "--max_train_steps", args.steps,

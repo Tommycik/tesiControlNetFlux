@@ -55,7 +55,7 @@ pipe.to("cuda")
 controlnet_type_capitalized = args.controlnet_type.capitalize()
 from pathlib import Path
 
-control_img = args.control_image or f"controlnet_dataset/imagesControl{controlnet_type_capitalized}/sample_0000_{args.controlnet_type}.jpg"
+control_img = args.control_image or f"../controlnet_dataset/imagesControl{controlnet_type_capitalized}/sample_0000_{args.controlnet_type}.jpg"
 abs_path = str(Path(control_img).resolve())
 if not Path(control_img).is_file():
     raise FileNotFoundError(f"File not found. Searched in: {abs_path}")
