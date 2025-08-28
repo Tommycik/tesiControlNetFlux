@@ -66,27 +66,39 @@ result = pipe(
     guidance_scale=args.guidance,
 ).images[0]
 
-# Upload to Cloudinary
-img_byte_arr = BytesIO()
-result.save(img_byte_arr, format='JPEG')
-img_byte_arr.seek(0)
 timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 unique_id = uuid.uuid4().hex[:8]
 base_public_id = f"{timestamp}_{unique_id}"
-response = cloudinary.uploader.upload(img_byte_arr, public_id=base_public_id, folder=f"{controlnet_model}_results",
-            resource_type="image")
+
+# Carica immagine generata
+img_byte_arr = BytesIO()
+result.save(img_byte_arr, format='JPEG')
+img_byte_arr.seek(0)
+response = cloudinary.uploader.upload(
+    img_byte_arr,
+    public_id=base_public_id,
+    folder="repo_image",
+    resource_type="image"
+)
 print(response["secure_url"])
 
-#Upload the control image
+# Carica immagine di controllo
 control_img_byte_arr = BytesIO()
 control_image.save(control_img_byte_arr, format='JPEG')
 control_img_byte_arr.seek(0)
-
-control_public_id = f"{base_public_id}_control"
 response_control = cloudinary.uploader.upload(
     control_img_byte_arr,
-    public_id=control_public_id,
-    folder=f"{controlnet_model}_results",
+    public_id=f"{base_public_id}_control",
+    folder="repo_control",
     resource_type="image"
 )
-#todo mostrarla accanto a immagine generata
+
+# Carica file di testo con prompt e parametri
+text_content = f"Prompt: {args.prompt}\nScale: {args.scale}\nSteps: {args.steps}\nGuidance: {args.guidance}\nControlnet_model: {args.controlnet_model}\nControlnet_type: {args.controlnet_type}\nN4: {args.N4}\n"
+text_byte_arr = BytesIO(text_content.encode('utf-8'))
+response_text = cloudinary.uploader.upload(
+    text_byte_arr,
+    public_id=f"{base_public_id}_text",
+    folder="repo_text",
+    resource_type="raw"
+)
