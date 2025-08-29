@@ -72,7 +72,7 @@ training_command = [
     "--set_grads_to_none",
     "--push_to_hub",
     "--controlnet_type", args.controlnet_type.lower(),
-    "--N4", str(args.N4),
+    "--N4", args.N4,
     "--hub_model_id", args.hub_model_id
 ]
 
