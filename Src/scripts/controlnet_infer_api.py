@@ -86,7 +86,7 @@ response = cloudinary.uploader.upload(
     folder="repo_image",
     resource_type="image"
 )
-print(f"[RESULT_URL]{response['secure_url']}[/RESULT_URL]", flush=True)
+print(response["secure_url"], flush=True)
 
 # Carica immagine di controllo
 control_img_byte_arr = BytesIO()
