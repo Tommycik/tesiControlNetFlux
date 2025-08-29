@@ -30,8 +30,24 @@ login(token=os.environ["HUGGINGFACE_TOKEN"])
 output_dir = "model"
 base_model = 'black-forest-labs/FLUX.1-dev'
 controlnet_model = args.controlnet_model
-training_script = "scripts/train_controlnet_flux.py"
-control_img = args.validation_image or f"controlnet_dataset/images/sample_0000.jpg"
+training_script = "train_controlnet_flux.py"
+from pathlib import Path
+
+script_dir = Path(__file__).resolve().parent
+
+# Validation image
+if args.validation_image:
+    control_img_path = Path(args.validation_image).resolve()
+else:
+    control_img_path = script_dir.parent / "controlnet_dataset/images/sample_0000.jpg"
+
+if not control_img_path.is_file():
+    raise FileNotFoundError(f"Validation image not found at {control_img_path}")
+
+# JSON dataset
+jsonl_path = script_dir.parent / f"controlnet_dataset/dataset_{args.controlnet_type.lower()}.jsonl"
+if not jsonl_path.is_file():
+    raise FileNotFoundError(f"Dataset JSON not found at {jsonl_path}")
 training_command = [
     "accelerate", "launch", training_script,
     "--pretrained_model_name_or_path", base_model,
@@ -40,14 +56,14 @@ training_command = [
     "--conditioning_image_column", "condition_image",
     "--image_column", "image",
     "--caption_column", "prompt",
-    f"--jsonl_for_train", f"../controlnet_dataset/dataset_{args.controlnet_type.lower()}.jsonl",
+    f"--jsonl_for_train", str(jsonl_path),
     "--resolution", args.resolution,
     "--learning_rate", args.learning_rate,
     "--max_train_steps", args.steps,
     "--checkpointing_steps", args.checkpointing_steps,
     "--validation_steps", args.validation_steps,
     "--mixed_precision", args.mixed_precision,
-    "--validation_image", control_img,
+    "--validation_image", str(control_img_path),
     "--validation_prompt", args.prompt,
     "--train_batch_size", args.train_batch_size,
     "--gradient_accumulation_steps", args.gradient_accumulation_steps,
@@ -56,7 +72,7 @@ training_command = [
     "--set_grads_to_none",
     "--push_to_hub",
     "--controlnet_type", args.controlnet_type.lower(),
-    "--N4", args.N4,
+    "--N4", str(args.N4),
     "--hub_model_id", args.hub_model_id
 ]
 
