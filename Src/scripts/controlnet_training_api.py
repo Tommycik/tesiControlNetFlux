@@ -80,7 +80,7 @@ print("Esecuzione comando Accelerate:")
 print(" ".join(map(str, training_command)), flush=True)
 
 process = subprocess.Popen(
-    list(map(str, training_command)),
+    training_command,
     stdout=subprocess.PIPE,
     stderr=subprocess.STDOUT,
     text=True
