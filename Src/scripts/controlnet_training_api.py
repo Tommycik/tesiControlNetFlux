@@ -50,7 +50,7 @@ if not jsonl_path.is_file():
     raise FileNotFoundError(f"Dataset JSON not found at {jsonl_path}")
 training_command = [
     "accelerate", "launch", training_script,
-    "--pretrained_model_name_or_path", str(base_model),
+    "--pretrained_model_name_or_path", base_model,
     "--controlnet_model_name_or_path", controlnet_model,
     "--output_dir", output_dir,
     "--conditioning_image_column", "condition_image",
