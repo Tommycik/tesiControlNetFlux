@@ -9,6 +9,7 @@ import os
 import subprocess
 import torch
 import shutil
+from pathlib import Path
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--prompt', type=str, default='transparent glass on white background, the bottom part of the glass presents light grooves')
@@ -33,6 +34,8 @@ output_dir = "model"
 base_model = 'black-forest-labs/FLUX.1-dev'
 controlnet_model = args.controlnet_model
 training_script = "scripts/train_controlnet_flux.py"
+training_script = Path(__file__).resolve() / training_script
+training_script = training_script.resolve()
 from pathlib import Path
 
 # Validation image
