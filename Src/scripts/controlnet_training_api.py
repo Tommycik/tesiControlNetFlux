@@ -33,19 +33,17 @@ controlnet_model = args.controlnet_model
 training_script = "scripts/train_controlnet_flux.py"
 from pathlib import Path
 
-script_dir = Path(__file__).resolve().parent
-
 # Validation image
-if args.validation_image:
-    control_img_path = Path(args.validation_image).resolve()
-else:
-    control_img_path = script_dir.parent / "controlnet_dataset/images/sample_0000.jpg"
-
-if not control_img_path.is_file():
-    raise FileNotFoundError(f"Validation image not found at {control_img_path}")
+validation_image_path = args.validation_image or "../controlnet_dataset/images/sample_0000.jpg"
+validation_image_path = Path(__file__).resolve().parent / validation_image_path
+validation_image_path = validation_image_path.resolve()
+if not validation_image_path.is_file():
+    raise FileNotFoundError(f"Validation image not found at {validation_image_path}")
 
 # JSON dataset
-jsonl_path = script_dir.parent / f"controlnet_dataset/dataset_{args.controlnet_type.lower()}.jsonl"
+jsonl_path = f"../controlnet_dataset/dataset_{args.controlnet_type.lower()}.jsonl"
+jsonl_path = Path(__file__).resolve().parent / jsonl_path
+jsonl_path = jsonl_path.resolve()
 if not jsonl_path.is_file():
     raise FileNotFoundError(f"Dataset JSON not found at {jsonl_path}")
 training_command = [
