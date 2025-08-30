@@ -1,6 +1,9 @@
 import sys
+import tempfile
 
-from huggingface_hub import login
+import HfApi
+import yaml
+from huggingface_hub import HfApi, login
 from datasets import load_dataset
 import argparse
 import os
@@ -92,4 +95,34 @@ if ret != 0:
     print(f"[ERROR] Training failed with exit code {ret}", flush=True)
     sys.exit(ret)
 
+train_config = {
+            "controlnet_type": args.controlnet_type,
+            "controlnet_model": args.controlnet_model,
+            "N4": args.N4,
+            "mixed_precision": args.mixed_precision,
+            "steps": args.steps,
+            "train_batch_size": args.train_batch_size,
+            "learning_rate": args.learning_rate,
+            "resolution": args.resolution,
+            "checkpointing_steps": args.checkpointing_steps,
+            "validation_steps": args.validation_steps,
+            "gradient_accumulation_steps": args.gradient_accumulation_steps,
+            "validation_image": args.validation_image_path or "default",
+            "hub_model_id": args.hub_model_id,
+        }
+
+yaml_path = os.path.join(tempfile.gettempdir(), "training_config.yaml")
+with open(yaml_path, "w") as f:
+    yaml.safe_dump(train_config, f)
+
+api = HfApi()
+
+# Now you can upload
+api.upload_file(
+    path_or_fileobj=yaml_path,
+    path_in_repo="training_config.yaml",
+    repo_id=args.hub_model_id,
+    repo_type="model",
+    token=os.environ["HUGGINGFACE_TOKEN"]
+)
 print("\n[TRAINING_COMPLETE]\n", flush=True)
