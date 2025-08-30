@@ -1,7 +1,6 @@
 import sys
 import tempfile
 
-import HfApi
 import yaml
 from huggingface_hub import HfApi, login
 from datasets import load_dataset
