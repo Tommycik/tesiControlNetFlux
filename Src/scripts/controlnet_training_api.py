@@ -30,7 +30,7 @@ login(token=os.environ["HUGGINGFACE_TOKEN"])
 output_dir = "model"
 base_model = 'black-forest-labs/FLUX.1-dev'
 controlnet_model = args.controlnet_model
-training_script = "train_controlnet_flux.py"
+training_script = "scripts/train_controlnet_flux.py"
 from pathlib import Path
 
 script_dir = Path(__file__).resolve().parent
