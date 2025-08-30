@@ -61,7 +61,7 @@ training_command = [
     "--checkpointing_steps", args.checkpointing_steps,
     "--validation_steps", args.validation_steps,
     "--mixed_precision", args.mixed_precision,
-    "--validation_image", control_img_path,
+    "--validation_image", validation_image_path,
     "--validation_prompt", args.prompt,
     "--train_batch_size", args.train_batch_size,
     "--gradient_accumulation_steps", args.gradient_accumulation_steps,
