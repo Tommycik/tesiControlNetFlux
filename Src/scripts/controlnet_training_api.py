@@ -2,7 +2,7 @@ import sys
 import tempfile
 
 import yaml
-from huggingface_hub import HfApi, login
+from huggingface_hub import HfApi, login, create_repo
 from datasets import load_dataset
 import argparse
 import os
@@ -131,7 +131,17 @@ train_config = {
 yaml_path = os.path.join(tempfile.gettempdir(), "training_config.yaml")
 with open(yaml_path, "w") as f:
     yaml.safe_dump(train_config, f)
-
+try:
+    api.list_repo_files(args.hub_model_id, repo_type="model")
+    print(f"[INFO] Repository {args.hub_model_id} esiste già.")
+except Exception as e:
+    print(f"[WARNING] Repository {args.hub_model_id} non trovato, lo creo...")
+    api.create_repo(
+        repo_id=args.hub_model_id,
+        repo_type="model",
+        private=True,
+        exist_ok=True  # evita crash se nel frattempo viene creato
+    )
 
 # Now you can upload
 api.upload_file(
