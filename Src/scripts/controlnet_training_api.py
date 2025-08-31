@@ -23,7 +23,7 @@ parser.add_argument('--mixed_precision', type=str, default='bf16')
 parser.add_argument('--controlnet_model', type=str,required=True)
 parser.add_argument('--controlnet_type', type=str,required=True)
 parser.add_argument('--learning_rate', type=str, default='2e-6')
-parser.add_argument('--N4', type=bool, default=False)
+parser.add_argument('--N4', action='store_true')
 parser.add_argument('--hub_model_id', required=True, type=str)
 parser.add_argument('--validation_image', type=str, default=None)
 args = parser.parse_args()
@@ -88,10 +88,11 @@ training_command = [
     "--train_batch_size", str(args.train_batch_size),
     "--gradient_accumulation_steps", str(args.gradient_accumulation_steps),
     "--controlnet_type", str(args.controlnet_type.lower()),
-    "--N4", str(args.N4).capitalize(),
     "--hub_model_id", str(args.hub_model_id),
 
 ]
+if args.N4:
+    training_command.append(f"--N4")
 
 print("Esecuzione comando Accelerate:")
 print(" ".join(map(str, training_command)), flush=True)
@@ -112,10 +113,13 @@ if ret != 0:
     print(f"[ERROR] Training failed with exit code {ret}", flush=True)
     sys.exit(ret)
 
+N4 = "false"
+if args.N4:
+    N4 = "true"
 train_config = {
             "controlnet_type": args.controlnet_type,
             "controlnet_model": args.controlnet_model,
-            "N4": args.N4,
+            "N4": N4,
             "mixed_precision": args.mixed_precision,
             "steps": args.steps,
             "train_batch_size": args.train_batch_size,

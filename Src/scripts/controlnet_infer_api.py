@@ -26,7 +26,7 @@ parser.add_argument('--steps', type=int, default=50)
 parser.add_argument('--guidance', type=float, default=6.0)
 parser.add_argument('--controlnet_model', type=str,required=True, default='tommycik/controlFluxAlcol')
 parser.add_argument('--controlnet_type', type=str,required=True, default='canny')
-parser.add_argument('--N4', type=bool, required=True, default=False)
+parser.add_argument('--N4', action='store_true')
 parser.add_argument('--control_image', type=str, default=None)
 args = parser.parse_args()
 
@@ -51,7 +51,7 @@ controlnet_model = args.controlnet_model
 default_canny = "InstantX/FLUX.1-dev-Controlnet-Canny"
 controlnet_model = validate_model_or_fallback(controlnet_model, default_canny)
 
-if(args.N4):
+if args.N4:
     bnb_config = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.float16)
 
     controlnet = FluxControlNetModel.from_pretrained(

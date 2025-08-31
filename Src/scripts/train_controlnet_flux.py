@@ -448,7 +448,7 @@ def parse_args(input_args=None):
     parser.add_argument("--push_to_hub", action="store_true", help="Whether or not to push the model to the Hub.")
     parser.add_argument("--hub_token", type=str, default=None, help="The token to use to push to the Model Hub.")
     parser.add_argument("--controlnet_type", type=str, default=None, help="Which control image type is used")
-    parser.add_argument('--N4', type=bool, default=False)
+    parser.add_argument('--N4', action='store_true')
     parser.add_argument(
         "--hub_model_id",
         type=str,
@@ -850,12 +850,12 @@ def main(args):
         )
 
     accelerator_project_config = ProjectConfiguration(project_dir=args.output_dir, logging_dir=str(logging_out_dir))
-    if args.N4 == False:
+    if not args.N4 :
         accelerator = Accelerator(
-        gradient_accumulation_steps=args.gradient_accumulation_steps,
-        mixed_precision=args.mixed_precision,
-        log_with=args.report_to,
-        project_config=accelerator_project_config,
+            gradient_accumulation_steps=args.gradient_accumulation_steps,
+            mixed_precision=args.mixed_precision,
+            log_with=args.report_to,
+            project_config=accelerator_project_config,
         )
     else:
         # If using bitsandbytes 8bit optimizer with fp16, disable gradient scaling
@@ -1076,7 +1076,7 @@ def main(args):
     )
 
     #Using N4 will give error
-    if (unwrap_model(flux_controlnet).dtype != torch.float32) & (args.N4==False):
+    if (unwrap_model(flux_controlnet).dtype != torch.float32) & (not args.N4):
         raise ValueError(
             f"Controlnet loaded as datatype {unwrap_model(flux_controlnet).dtype}. {low_precision_error_string}"
         )
@@ -1215,7 +1215,7 @@ def main(args):
         num_cycles=args.lr_num_cycles,
         power=args.lr_power,
     )
-    if args.N4==False:
+    if not args.N4:
         # Disable AMP gradient scaling for bitsandbytes + fp16
         if args.use_8bit_adam and accelerator.mixed_precision == "fp16":
             accelerator.scaler = None
