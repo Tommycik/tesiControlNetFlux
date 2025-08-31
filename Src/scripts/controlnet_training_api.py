@@ -34,7 +34,7 @@ output_dir = "model"
 base_model = 'black-forest-labs/FLUX.1-dev'
 controlnet_model = args.controlnet_model
 training_script = "scripts/train_controlnet_flux.py"
-training_script = Path(__file__).resolve() / training_script
+training_script = Path(__file__).resolve().parent / training_script
 training_script = training_script.resolve()
 from pathlib import Path
 
