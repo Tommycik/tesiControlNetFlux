@@ -55,8 +55,8 @@ training_script = training_script.resolve()
 from pathlib import Path
 
 # Validation image
-validation_image_path = args.validation_image or "../controlnet_dataset/images/sample_0000.jpg"
-validation_image_path = Path(__file__).resolve().parent / validation_image_path
+validation_image_path = args.validation_image or "controlnet_dataset/images/sample_0000.jpg"
+validation_image_path = Path(__file__).resolve().parent.parent / validation_image_path
 validation_image_path = validation_image_path.resolve()
 if not validation_image_path.is_file():
     raise FileNotFoundError(f"Validation image not found at {validation_image_path}")
