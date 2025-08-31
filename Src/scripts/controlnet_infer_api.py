@@ -75,7 +75,10 @@ result = pipe(
 timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 unique_id = uuid.uuid4().hex[:8]
 base_public_id = f"{timestamp}_{unique_id}"
-
+folder_base = f"{args.controlnet_model}_results"
+folder_image = f"{folder_base}/repo_image"
+folder_control = f"{folder_base}/repo_control"
+folder_text = f"{folder_base}/repo_text"
 # Carica immagine generata
 img_byte_arr = BytesIO()
 result.save(img_byte_arr, format='JPEG')
@@ -83,7 +86,7 @@ img_byte_arr.seek(0)
 response = cloudinary.uploader.upload(
     img_byte_arr,
     public_id=base_public_id,
-    folder="repo_image",
+    folder=folder_image,
     resource_type="image"
 )
 print(response["secure_url"], flush=True)
@@ -95,7 +98,7 @@ control_img_byte_arr.seek(0)
 response_control = cloudinary.uploader.upload(
     control_img_byte_arr,
     public_id=f"{base_public_id}_control",
-    folder="repo_control",
+    folder=folder_control,
     resource_type="image"
 )
 
@@ -105,6 +108,6 @@ text_byte_arr = BytesIO(text_content.encode('utf-8'))
 response_text = cloudinary.uploader.upload(
     text_byte_arr,
     public_id=f"{base_public_id}_text",
-    folder="repo_text",
+    folder=folder_text,
     resource_type="raw"
 )
