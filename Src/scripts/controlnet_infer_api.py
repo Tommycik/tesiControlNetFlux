@@ -71,8 +71,8 @@ pipe.to("cuda")
 controlnet_type_capitalized = args.controlnet_type.capitalize()
 from pathlib import Path
 
-control_img = args.control_image or f"../controlnet_dataset/imagesControl{controlnet_type_capitalized}/sample_0000_{args.controlnet_type}.jpg"
-control_img_path = Path(__file__).resolve().parent / control_img
+control_img = args.control_image or f"controlnet_dataset/imagesControl{controlnet_type_capitalized}/sample_0000_{args.controlnet_type}.jpg"
+control_img_path = Path(__file__).resolve().parent.parent / control_img
 control_img_path = control_img_path.resolve()
 
 if not control_img_path.is_file():
