@@ -62,8 +62,8 @@ if not validation_image_path.is_file():
     raise FileNotFoundError(f"Validation image not found at {validation_image_path}")
 
 # JSON dataset
-jsonl_path = f"../controlnet_dataset/dataset_{args.controlnet_type.lower()}.jsonl"
-jsonl_path = Path(__file__).resolve().parent / jsonl_path
+jsonl_path = f"controlnet_dataset/dataset_{args.controlnet_type.lower()}.jsonl"
+jsonl_path = Path(__file__).resolve().parent.parent / jsonl_path
 jsonl_path = jsonl_path.resolve()
 if not jsonl_path.is_file():
     raise FileNotFoundError(f"Dataset JSON not found at {jsonl_path}")
