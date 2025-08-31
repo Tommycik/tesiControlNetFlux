@@ -89,7 +89,10 @@ training_command = [
     "--gradient_accumulation_steps", str(args.gradient_accumulation_steps),
     "--controlnet_type", str(args.controlnet_type.lower()),
     "--hub_model_id", str(args.hub_model_id),
-    "--push_to_hub"
+    "--gradient_checkpointing",
+    "--use_8bit_adam",
+    "--set_grads_to_none",
+    "--push_to_hub",
 
 ]
 if args.N4:
