@@ -52,14 +52,14 @@ default_canny = "InstantX/FLUX.1-dev-Controlnet-Canny"
 controlnet_model = validate_model_or_fallback(controlnet_model, default_canny)
 
 if args.N4:
-    bnb_config = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.float16)
+    bnb_config = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.bfloat16)
 
     controlnet = FluxControlNetModel.from_pretrained(
         controlnet_model,
         quantization_config=bnb_config,
         # device_map="auto" not supported
     )
-    pipe = FluxControlNetPipeline.from_pretrained(base_model, controlnet=controlnet, torch_dtype=torch.float16)
+    pipe = FluxControlNetPipeline.from_pretrained(base_model, controlnet=controlnet, torch_dtype=torch.bfloat16)
 
 else:
 

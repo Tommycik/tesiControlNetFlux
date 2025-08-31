@@ -68,7 +68,7 @@ except ImportError:
 from transformers import BitsAndBytesConfig
 
 #N4
-bnb_config = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.float16)#todo verificare compatibilità con più mixed precisions
+bnb_config = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.bfloat16)
 
 if is_wandb_available():
     import wandb
@@ -1130,9 +1130,9 @@ def main(args):
     # For mixed precision training we cast the text_encoder and vae weights to half-precision
     # as these models are only used for inference, keeping weights in full precision is not required.
     weight_dtype = torch.float32
-    if (accelerator.mixed_precision == "fp16") or args.N4:
+    if (accelerator.mixed_precision == "fp16"):
         weight_dtype = torch.float16
-    elif accelerator.mixed_precision == "bf16":
+    elif accelerator.mixed_precision == "bf16" or args.N4:
         weight_dtype = torch.bfloat16
 
     vae.to(accelerator.device, dtype=weight_dtype)
