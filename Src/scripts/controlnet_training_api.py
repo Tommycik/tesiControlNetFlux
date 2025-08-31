@@ -28,11 +28,27 @@ parser.add_argument('--hub_model_id', required=True, type=str)
 parser.add_argument('--validation_image', type=str, default=None)
 args = parser.parse_args()
 
+api = HfApi()
+def validate_model_or_fallback(model_id: str, default_model: str):
+    """Controlla se il repo contiene un config.json, altrimenti torna al default."""
+    try:
+        files = api.list_repo_files(model_id)
+        if "config.json" in files:
+            return model_id
+        else:
+            print(f"[WARNING] Repo {model_id} non valido, uso fallback {default_model}")
+            return default_model
+    except Exception as e:
+        print(f"[ERROR] Impossibile accedere al repo {model_id}: {e}")
+        return default_model
+
 login(token=os.environ["HUGGINGFACE_TOKEN"])
 
 output_dir = "model"
 base_model = 'black-forest-labs/FLUX.1-dev'
 controlnet_model = args.controlnet_model
+default_canny = "InstantX/FLUX.1-dev-Controlnet-Canny"
+controlnet_model = validate_model_or_fallback(controlnet_model, default_canny)
 training_script = "train_controlnet_flux.py"
 training_script = Path(__file__).resolve().parent / training_script
 training_script = training_script.resolve()
@@ -51,6 +67,7 @@ jsonl_path = Path(__file__).resolve().parent / jsonl_path
 jsonl_path = jsonl_path.resolve()
 if not jsonl_path.is_file():
     raise FileNotFoundError(f"Dataset JSON not found at {jsonl_path}")
+
 training_command = [
     "accelerate", "launch", training_script,
     "--pretrained_model_name_or_path", base_model,
@@ -114,7 +131,6 @@ yaml_path = os.path.join(tempfile.gettempdir(), "training_config.yaml")
 with open(yaml_path, "w") as f:
     yaml.safe_dump(train_config, f)
 
-api = HfApi()
 
 # Now you can upload
 api.upload_file(

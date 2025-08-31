@@ -1,7 +1,7 @@
 import argparse
 import os
 
-from huggingface_hub import login
+from huggingface_hub import login, HfApi
 from diffusers.utils import load_image
 from diffusers.pipelines.flux.pipeline_flux_controlnet import FluxControlNetPipeline
 from diffusers.models.controlnets.controlnet_flux import FluxControlNetModel
@@ -30,10 +30,26 @@ parser.add_argument('--N4', type=bool, required=True, default=False)
 parser.add_argument('--control_image', type=str, default=None)
 args = parser.parse_args()
 
+api = HfApi()
+def validate_model_or_fallback(model_id: str, default_model: str):
+    """Controlla se il repo contiene un config.json, altrimenti torna al default."""
+    try:
+        files = api.list_repo_files(model_id)
+        if "config.json" in files:
+            return model_id
+        else:
+            print(f"[WARNING] Repo {model_id} non valido, uso fallback {default_model}")
+            return default_model
+    except Exception as e:
+        print(f"[ERROR] Impossibile accedere al repo {model_id}: {e}")
+        return default_model
+
 login(token=os.environ["HUGGINGFACE_TOKEN"])
 
 base_model = 'black-forest-labs/FLUX.1-dev'
 controlnet_model = args.controlnet_model
+default_canny = "InstantX/FLUX.1-dev-Controlnet-Canny"
+controlnet_model = validate_model_or_fallback(controlnet_model, default_canny)
 
 if(args.N4):
     bnb_config = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.float16)
