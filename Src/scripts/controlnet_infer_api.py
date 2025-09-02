@@ -80,12 +80,17 @@ if not control_img_path.is_file():
 
 control_image = load_image(str(control_img_path))
 
+def progress_callback(step: int, timestep: int, latents):
+    print(f"[PROGRESS] {step}/{args.steps}", flush=True)
+
 result = pipe(
     args.prompt,
     control_image=control_image,
     controlnet_conditioning_scale=args.scale,
     num_inference_steps=args.steps,
     guidance_scale=args.guidance,
+    callback=progress_callback,
+    callback_steps=1,   # print every step
 ).images[0]
 
 timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
