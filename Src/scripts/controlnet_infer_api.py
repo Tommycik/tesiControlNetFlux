@@ -16,7 +16,7 @@ from diffusers import logging as diffusers_logging
 import logging
 from tqdm import tqdm
 import sys
-
+tqdm.monitor_interval = 0
 cloudinary.config(
     cloud_name=os.environ["CLOUDINARY_CLOUD_NAME"],
     api_key=os.environ["CLOUDINARY_API_KEY"],
@@ -73,7 +73,7 @@ else:
     pipe = FluxControlNetPipeline.from_pretrained(base_model, controlnet=controlnet, torch_dtype=torch.bfloat16)
 
 pipe.to("cuda")
-pipe.progress_bar = lambda *args, **kwargs: tqdm(*args, file=sys.stdout, leave=True)
+
 controlnet_type_capitalized = args.controlnet_type.capitalize()
 from pathlib import Path
 

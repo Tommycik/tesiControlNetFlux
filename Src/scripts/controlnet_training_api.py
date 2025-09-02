@@ -135,7 +135,7 @@ train_config = {
             "checkpointing_steps": args.checkpointing_steps,
             "validation_steps": args.validation_steps,
             "gradient_accumulation_steps": args.gradient_accumulation_steps,
-            "validation_image": str(args.validation_imag) or "default",
+            "validation_image": str(args.validation_image) or "default",
             "hub_model_id": args.hub_model_id,
         }
 
