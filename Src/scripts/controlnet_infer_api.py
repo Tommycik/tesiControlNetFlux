@@ -80,36 +80,14 @@ if not control_img_path.is_file():
 
 control_image = load_image(str(control_img_path))
 
-pipe.scheduler.set_timesteps(args.steps)
-pipe.enable_attention_slicing()  # optional, saves VRAM
-
-# Prepare latents
-latents = pipe.prepare_latents(batch_size=1, image=control_image, generator=None)
-
-for step, t in enumerate(pipe.scheduler.timesteps, 1):
-    # Predict noise
-    noise_pred = pipe.unet(
-        latents,
-        t,
-        encoder_hidden_states=pipe._encode_prompt(args.prompt, device="cuda")
-    )[0]
-
-    # Classifier-free guidance
-    if args.guidance > 1.0:
-        noise_pred_uncond = pipe.unet(
-            latents,
-            t,
-            encoder_hidden_states=pipe._encode_prompt("", device="cuda")
-        )[0]
-        noise_pred = noise_pred_uncond + args.guidance * (noise_pred - noise_pred_uncond)
-
-    # Step scheduler
-    latents = pipe.scheduler.step(noise_pred, t, latents).prev_sample
-
-    print(f"[PROGRESS] Step {step}/{args.steps}", flush=True)
-
-# Decode final image
-result = pipe.decode_latents(latents)[0]
+result = pipe(
+    args.prompt,
+    control_image=control_image,
+    controlnet_conditioning_scale=args.scale,
+    num_inference_steps=args.steps,
+    guidance_scale=args.guidance,
+    callback_steps=1,   # print every step
+).images[0]
 
 timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 unique_id = uuid.uuid4().hex[:8]
