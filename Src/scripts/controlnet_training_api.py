@@ -117,13 +117,10 @@ if ret != 0:
     print(f"[ERROR] Training failed with exit code {ret}", flush=True)
     sys.exit(ret)
 
-N4 = "false"
-if args.N4:
-    N4 = "true"
 train_config = {
             "controlnet_type": args.controlnet_type,
             "controlnet_model": args.controlnet_model,
-            "N4": N4,
+            "N4": bool(args.N4),
             "mixed_precision": args.mixed_precision,
             "steps": args.steps,
             "train_batch_size": args.train_batch_size,
@@ -132,7 +129,7 @@ train_config = {
             "checkpointing_steps": args.checkpointing_steps,
             "validation_steps": args.validation_steps,
             "gradient_accumulation_steps": args.gradient_accumulation_steps,
-            "validation_image": args.validation_image or "default",
+            "validation_image": str(args.validation_imag) or "default",
             "hub_model_id": args.hub_model_id,
         }
 
