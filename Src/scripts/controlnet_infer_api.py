@@ -12,6 +12,8 @@ import cloudinary
 import cloudinary.uploader
 import torch
 import uuid
+from diffusers import logging as diffusers_logging
+import logging
 
 cloudinary.config(
     cloud_name=os.environ["CLOUDINARY_CLOUD_NAME"],
@@ -19,6 +21,8 @@ cloudinary.config(
     api_secret=os.environ["CLOUDINARY_API_SECRET"]
 )
 
+diffusers_logging.set_verbosity_info()   # or set_verbosity_debug() for more
+logging.basicConfig(level=logging.INFO)
 parser = argparse.ArgumentParser()
 parser.add_argument('--prompt', type=str, required=True)
 parser.add_argument('--scale', type=float, default=0.2)
