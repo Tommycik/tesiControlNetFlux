@@ -86,7 +86,6 @@ result = pipe(
     controlnet_conditioning_scale=args.scale,
     num_inference_steps=args.steps,
     guidance_scale=args.guidance,
-    callback_steps=1,   # print every step
 ).images[0]
 
 timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
