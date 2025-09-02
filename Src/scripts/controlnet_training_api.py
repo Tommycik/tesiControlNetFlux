@@ -106,11 +106,17 @@ process = subprocess.Popen(
     stdout=subprocess.PIPE,
     cwd=str(Path(__file__).resolve().parent.parent),
     stderr=subprocess.STDOUT,
-    text=True
+    text=True,
+    bufsize=1,  # line buffered
+    universal_newlines=True
 )
 
-for line in iter(process.stdout.readline, ''):
-    print(line, flush=True)  # flush so logs reach Flask/SSH
+collected_output = []
+for line in iter(process.stdout.readline, ""):
+    if not line:
+        break
+    print(line, end="", flush=True)
+    collected_output.append(line)
 
 ret = process.wait()
 if ret != 0:
