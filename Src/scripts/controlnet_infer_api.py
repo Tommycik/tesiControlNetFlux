@@ -80,9 +80,6 @@ if not control_img_path.is_file():
 
 control_image = load_image(str(control_img_path))
 
-def progress_callback(step: int, timestep: int, latents):
-    print(f"[PROGRESS] {step}/{args.steps}", flush=True)
-
 pipe.scheduler.set_timesteps(args.steps)
 pipe.enable_attention_slicing()  # optional, saves VRAM
 
@@ -109,7 +106,6 @@ for step, t in enumerate(pipe.scheduler.timesteps, 1):
     # Step scheduler
     latents = pipe.scheduler.step(noise_pred, t, latents).prev_sample
 
-    # Print real-time progress for API caller
     print(f"[PROGRESS] Step {step}/{args.steps}", flush=True)
 
 # Decode final image
