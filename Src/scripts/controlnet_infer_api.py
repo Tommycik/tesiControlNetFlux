@@ -14,9 +14,17 @@ import torch
 import uuid
 from diffusers import logging as diffusers_logging
 import logging
-from tqdm import tqdm
+from tqdm import tqdm as original_tqdm
 import sys
-tqdm.monitor_interval = 0
+
+def line_tqdm(*args, **kwargs):
+    kwargs.update(dict(mininterval=0, miniters=1, leave=True, file=sys.stdout))
+    t = original_tqdm(*args, **kwargs)
+    t.refresh = lambda: None  # disable overwrite
+    return t
+
+import builtins
+builtins.tqdm = line_tqdm
 cloudinary.config(
     cloud_name=os.environ["CLOUDINARY_CLOUD_NAME"],
     api_key=os.environ["CLOUDINARY_API_KEY"],
