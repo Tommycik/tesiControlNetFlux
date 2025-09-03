@@ -18,9 +18,16 @@ from tqdm import tqdm as original_tqdm
 import sys
 
 def line_tqdm(*args, **kwargs):
-    kwargs.update(dict(mininterval=0, miniters=1, leave=True, file=sys.stdout))
+    kwargs.update(dict(
+        mininterval=0,
+        miniters=1,
+        leave=True,
+        file=sys.stdout,
+        dynamic_ncols=False
+    ))
+    # critical: disable carriage return
     t = original_tqdm(*args, **kwargs)
-    t.refresh = lambda: None  # disable overwrite
+    t.display = lambda msg=None, pos=None: sys.stdout.write((msg or t.__str__()) + "\n") or sys.stdout.flush()
     return t
 
 import builtins
