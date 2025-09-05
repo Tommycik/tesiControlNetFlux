@@ -1,5 +1,12 @@
 import argparse
 import os
+import sys
+import cloudinary
+import cloudinary.uploader
+import torch
+import uuid
+import logging
+import builtins
 
 from huggingface_hub import login, HfApi
 from diffusers.utils import load_image
@@ -8,14 +15,9 @@ from diffusers.models.controlnets.controlnet_flux import FluxControlNetModel
 from io import BytesIO
 from datetime import datetime
 from transformers import BitsAndBytesConfig
-import cloudinary
-import cloudinary.uploader
-import torch
-import uuid
 from diffusers import logging as diffusers_logging
-import logging
 from tqdm import tqdm as original_tqdm
-import sys
+from pathlib import Path
 
 def line_tqdm(*args, **kwargs):
     kwargs.update(dict(
@@ -30,7 +32,7 @@ def line_tqdm(*args, **kwargs):
     t.display = lambda msg=None, pos=None: sys.stdout.write((msg or t.__str__()) + "\n") or sys.stdout.flush()
     return t
 
-import builtins
+
 builtins.tqdm = line_tqdm
 cloudinary.config(
     cloud_name=os.environ["CLOUDINARY_CLOUD_NAME"],
@@ -38,7 +40,7 @@ cloudinary.config(
     api_secret=os.environ["CLOUDINARY_API_SECRET"]
 )
 
-diffusers_logging.set_verbosity_info()   # or set_verbosity_debug() for more
+diffusers_logging.set_verbosity_info()
 logging.basicConfig(level=logging.INFO)
 parser = argparse.ArgumentParser()
 parser.add_argument('--prompt', type=str, required=True)
@@ -53,16 +55,16 @@ args = parser.parse_args()
 
 api = HfApi()
 def validate_model_or_fallback(model_id: str, default_model: str):
-    """Controlla se il repo contiene un config.json, altrimenti torna al default."""
+    #check if model is valid
     try:
         files = api.list_repo_files(model_id)
         if "config.json" in files:
             return model_id
         else:
-            print(f"[WARNING] Repo {model_id} non valido, uso fallback {default_model}")
+            print(f"[WARNING] Repository {model_id} not valid, using fallback {default_model}")
             return default_model
     except Exception as e:
-        print(f"[ERROR] Impossibile accedere al repo {model_id}: {e}")
+        print(f"[ERROR] Repository {model_id}: {e} isn't accessible, using fallback {default_model}")
         return default_model
 
 login(token=os.environ["HUGGINGFACE_TOKEN"])
@@ -90,7 +92,6 @@ else:
 pipe.to("cuda")
 
 controlnet_type_capitalized = args.controlnet_type.capitalize()
-from pathlib import Path
 
 control_img = args.control_image or f"controlnet_dataset/imagesControl{controlnet_type_capitalized}/sample_0000_{args.controlnet_type}.jpg"
 control_img_path = Path(__file__).resolve().parent.parent / control_img
@@ -116,7 +117,7 @@ folder_base = f"{args.controlnet_model}_results"
 folder_image = f"{folder_base}/repo_image"
 folder_control = f"{folder_base}/repo_control"
 folder_text = f"{folder_base}/repo_text"
-# Carica immagine generata
+# Uploads generated image
 img_byte_arr = BytesIO()
 result.save(img_byte_arr, format='JPEG')
 img_byte_arr.seek(0)
@@ -128,7 +129,7 @@ response = cloudinary.uploader.upload(
 )
 print(response["secure_url"], flush=True)
 
-# Carica immagine di controllo
+# Uploads control image
 control_img_byte_arr = BytesIO()
 control_image.save(control_img_byte_arr, format='JPEG')
 control_img_byte_arr.seek(0)
@@ -139,7 +140,7 @@ response_control = cloudinary.uploader.upload(
     resource_type="image"
 )
 
-# Carica file di testo con prompt e parametri
+# Uploads parameters and prompt as text file
 text_content = f"Prompt: {args.prompt}\nScale: {args.scale}\nSteps: {args.steps}\nGuidance: {args.guidance}\nControlnet_model: {args.controlnet_model}\nControlnet_type: {args.controlnet_type}\nN4: {args.N4}\n"
 text_byte_arr = BytesIO(text_content.encode('utf-8'))
 response_text = cloudinary.uploader.upload(

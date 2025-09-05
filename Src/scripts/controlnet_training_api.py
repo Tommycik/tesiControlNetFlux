@@ -1,14 +1,14 @@
 import sys
 import tempfile
-
 import yaml
-from huggingface_hub import HfApi, login, create_repo
-from datasets import load_dataset
 import argparse
 import os
 import subprocess
 import torch
 import shutil
+
+from huggingface_hub import HfApi, login, create_repo
+from datasets import load_dataset
 from pathlib import Path
 
 parser = argparse.ArgumentParser()
@@ -30,16 +30,16 @@ args = parser.parse_args()
 
 api = HfApi()
 def validate_model_or_fallback(model_id: str, default_model: str):
-    """Controlla se il repo contiene un config.json, altrimenti torna al default."""
+    #check if model is valid
     try:
         files = api.list_repo_files(model_id)
         if "config.json" in files:
             return model_id
         else:
-            print(f"[WARNING] Repo {model_id} non valido, uso fallback {default_model}")
+            print(f"[WARNING] Repository {model_id} not valid, using fallback {default_model}")
             return default_model
     except Exception as e:
-        print(f"[ERROR] Impossibile accedere al repo {model_id}: {e}")
+        print(f"[ERROR] Repository {model_id}: {e} isn't accessible, using fallback {default_model}")
         return default_model
 
 login(token=os.environ["HUGGINGFACE_TOKEN"])
@@ -52,7 +52,7 @@ controlnet_model = validate_model_or_fallback(controlnet_model, default_canny)
 training_script = "train_controlnet_flux.py"
 training_script = Path(__file__).resolve().parent / training_script
 training_script = training_script.resolve()
-from pathlib import Path
+
 
 # Validation image
 validation_image_path = args.validation_image or "controlnet_dataset/images/sample_0000.jpg"
@@ -98,7 +98,7 @@ training_command = [
 if args.N4:
     training_command.append(f"--N4")
 
-print("Esecuzione comando Accelerate:")
+print("Accelerate:")
 print(" ".join(map(str, training_command)), flush=True)
 
 process = subprocess.Popen(
@@ -123,6 +123,7 @@ if ret != 0:
     print(f"[ERROR] Training failed with exit code {ret}", flush=True)
     sys.exit(ret)
 
+#Saving training configuration
 train_config = {
             "controlnet_type": args.controlnet_type,
             "controlnet_model": args.controlnet_model,
@@ -144,17 +145,16 @@ with open(yaml_path, "w") as f:
     yaml.safe_dump(train_config, f)
 try:
     api.list_repo_files(args.hub_model_id, repo_type="model")
-    print(f"[INFO] Repository {args.hub_model_id} esiste già.")
+    print(f"[INFO] Repository {args.hub_model_id} already existing.")
 except Exception as e:
-    print(f"[WARNING] Repository {args.hub_model_id} non trovato, lo creo...")
+    print(f"[WARNING] Repository {args.hub_model_id} not found, creating it...")
     api.create_repo(
         repo_id=args.hub_model_id,
         repo_type="model",
         private=True,
-        exist_ok=True  # evita crash se nel frattempo viene creato
+        exist_ok=True
     )
 
-# Now you can upload
 api.upload_file(
     path_or_fileobj=yaml_path,
     path_in_repo="training_config.yaml",

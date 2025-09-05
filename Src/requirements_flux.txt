@@ -11,3 +11,6 @@ opencv-python
 torch
 diffusers
 cloudinary
+huggingface_hub
+tqdm
+pyyaml
