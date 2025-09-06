@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 from tqdm import tqdm
 import subprocess
-# Input dir
+# Input directories , modify if needed by the database structure
 images_dir = Path("content/image")
 canny_dir = Path("content/canny")
 prompts_file = Path("content/captions_eng.csv")
@@ -23,7 +23,7 @@ assert len(image_files) == len(canny_files)
 
 dataset = []
 
-#todo modificare per nuovo dataset
+#todo modificare per nuovo dataset e chiedere prof se va bene o da separare in file più piccoli
 print("Creating dataset")
 for idx, (img_path, canny_path, prompt) in tqdm(enumerate(zip(image_files, canny_files, prompts)), total=len(prompts)):
     base_name = f"sample_{idx:04d}"
