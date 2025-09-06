@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 from tqdm import tqdm
 import subprocess
+import shutil
 # Input directories , modify if needed by the database structure
 images_dir = Path("content/image")
 canny_dir = Path("content/canny")
@@ -32,12 +33,15 @@ for idx, (img_path, canny_path, prompt) in tqdm(enumerate(zip(image_files, canny
     new_canny_path = output_dir / f"imagesControlCanny/{base_name}_canny.jpg"
 
     # Copy files
-    os.system(f'copy  "{img_path}" "{new_img_path}"')
-    os.system(f'copy  "{canny_path}" "{new_canny_path}"')
-
+    (output_dir / "images").mkdir(parents=True, exist_ok=True)
+    (output_dir / "imagesControlCanny").mkdir(parents=True, exist_ok=True)
+    (output_dir / "imagesControlHed").mkdir(parents=True, exist_ok=True)
+    shutil.copy(img_path, new_img_path)
+    shutil.copy(canny_path, new_canny_path)
+    #todo controllare percorso inizi con controlnet_dataset
     dataset.append({
-        "image": "controlnet_dataset/"+new_img_path.name,
-        "condition_image": "controlnet_dataset/"+new_canny_path.name,
+        "image": "controlnet_dataset/"+str(new_img_path.name),
+        "condition_image": "controlnet_dataset/"+str(new_canny_path),
         "prompt": prompt
     })
 
@@ -47,18 +51,15 @@ with open(output_dir / "dataset_canny.json", "w", encoding="utf-8") as f:
 
 
 
-input_dir = 'images'
-output_dir = 'imagesControlHed'
+input_dir = output_dir / "images"
+hed_output_dir = output_dir / "imagesControlHed"
 model = 'bsds500'  # You can change this if needed
-
-# Make sure the output directory exists
-os.makedirs(output_dir, exist_ok=True)
 
 # Get all image files from the input directory
 for filename in os.listdir(input_dir):
     if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff')):
         input_path = os.path.join(input_dir, filename)
-        output_path = os.path.join(output_dir, os.path.splitext(filename)[0] + '_hed.jpg')
+        output_path = os.path.join(hed_output_dir, os.path.splitext(filename)[0] + '_hed.jpg')
 
         # Run the HED script using subprocess
         subprocess.run([
@@ -68,7 +69,7 @@ for filename in os.listdir(input_dir):
             '--out=' + output_path
         ])
 # Load the existing JSON
-with open("dataset_canny.json", "r", encoding="utf-8") as f:
+with open(output_dir / "dataset_canny.json", "r", encoding="utf-8") as f:
     data = json.load(f)
 
 # Replace "imagesControlCanny/XYZ_canny.jpg" with "imagesControlHed/XYZ_hed.jpg"
@@ -78,20 +79,20 @@ for entry in data:
     entry["condition_image"] = f"imagesControlHed/{filename}"
 
 # Save the modified JSON
-with open("dataset_hed.json", "w", encoding="utf-8") as f:
+with open(output_dir / "dataset_hed.json", "w", encoding="utf-8") as f:
     json.dump(data, f, indent=4)
 
-with open("dataset_canny.json", "r") as f:
+with open(output_dir / "dataset_canny.json", "r") as f:
     data = json.load(f)
 
-with open("dataset_canny.jsonl", "w") as f:
+with open(output_dir / "dataset_canny.jsonl", "w") as f:
     for item in data:
         f.write(json.dumps(item) + "\n")
 
-with open("dataset_hed.json", "r") as f:
+with open(output_dir / "dataset_hed.json", "r") as f:
     data = json.load(f)
 
-with open("dataset_hed.jsonl", "w") as f:
+with open(output_dir / "dataset_hed.jsonl", "w") as f:
     for item in data:
         f.write(json.dumps(item) + "\n")
 print(f"Dataset created in {output_dir}")
