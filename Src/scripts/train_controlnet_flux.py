@@ -858,7 +858,7 @@ def main(args):
             project_config=accelerator_project_config,
         )
     else:
-        # If using bitsandbytes 8bit optimizer with fp16, disable gradient scaling
+        # If using bitsandbytes 8bit optimizer  non compatibile, disable gradient scaling
         kwargs = {
             "gradient_accumulation_steps": args.gradient_accumulation_steps,
             "mixed_precision": args.mixed_precision,
