@@ -112,7 +112,6 @@ process = subprocess.Popen(
     text=True,
     bufsize=1,  # line buffered
     universal_newlines=True,
-    env=env,
 )
 
 collected_output = []
