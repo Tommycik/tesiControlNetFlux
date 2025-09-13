@@ -91,6 +91,7 @@ training_command = [
     "--hub_model_id", str(args.hub_model_id),
     "--gradient_checkpointing",
     "--use_8bit_adam",
+    "--report_to", "wandb",
     "--set_grads_to_none",
     "--push_to_hub",
 
