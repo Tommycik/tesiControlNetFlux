@@ -6,6 +6,7 @@ import os
 import subprocess
 import torch
 import shutil
+import wandb
 
 from huggingface_hub import HfApi, login, create_repo
 from datasets import load_dataset
@@ -43,7 +44,7 @@ def validate_model_or_fallback(model_id: str, default_model: str):
         return default_model
 
 login(token=os.environ["HUGGINGFACE_TOKEN"])
-
+wandb.login(key=os.environ["WANDB_TOKEN"])
 output_dir = "model"
 base_model = 'black-forest-labs/FLUX.1-dev'
 controlnet_model = args.controlnet_model
@@ -67,7 +68,7 @@ jsonl_path = Path(__file__).resolve().parent / jsonl_path
 jsonl_path = jsonl_path.resolve()
 if not jsonl_path.is_file():
     raise FileNotFoundError(f"Dataset JSON not found at {jsonl_path}")
-
+tracker_project_name = str(args.hub_model_id).replace("/", "_")
 training_command = [
     "accelerate", "launch", training_script,
     "--pretrained_model_name_or_path", base_model,
@@ -92,6 +93,7 @@ training_command = [
     "--gradient_checkpointing",
     "--use_8bit_adam",
     "--report_to", "wandb",
+    "--tracker_project_name", tracker_project_name,
     "--set_grads_to_none",
     "--push_to_hub",
 
@@ -109,7 +111,8 @@ process = subprocess.Popen(
     stderr=subprocess.STDOUT,
     text=True,
     bufsize=1,  # line buffered
-    universal_newlines=True
+    universal_newlines=True,
+    env=env,
 )
 
 collected_output = []
