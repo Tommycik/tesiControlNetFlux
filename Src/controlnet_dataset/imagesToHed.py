@@ -122,6 +122,20 @@ class Network(torch.nn.Module):
 
 netNetwork = None
 
+def run_hed(input_path, output_path):
+    global netNetwork
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    if netNetwork is None:
+        netNetwork = Network().to(device).eval()
+
+    img = PIL.Image.open(input_path).convert("RGB")
+    arr = numpy.array(img)[:, :, ::-1].transpose(2, 0, 1).astype(numpy.float32) * (1.0/255.0)
+    tenInput = torch.FloatTensor(numpy.ascontiguousarray(arr)).unsqueeze(0).to(device)
+
+    tenOutput = netNetwork(tenInput)[0].cpu().detach()
+    out_img = (tenOutput.squeeze().numpy() * 255.0).clip(0, 255).astype(numpy.uint8)
+    PIL.Image.fromarray(out_img).save(output_path)
 ##########################################################
 
 def estimate(ten_input):
