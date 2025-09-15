@@ -59,8 +59,8 @@ def generate_dataset():
         sample_name = OUT_BASE+"/"+IMAGES_DIR + "/" + f"{Path(orig).stem}.png"
 
         # JSONL rows: point to existing processed control images
-        canny_path = OUT_BASE+"/"+IMAGES_CANNY_DIR + "/" + f"{Path(orig).stem}_canny.png"
-        hed_path = OUT_BASE+"/"+IMAGES_HED_DIR + "/" + f"{Path(orig).stem}_hed.png"
+        canny_path = IMAGES_CANNY_DIR + "/" + f"{Path(orig).stem}_canny.png"
+        hed_path = IMAGES_HED_DIR + "/" + f"{Path(orig).stem}_hed.png"
 
         dataset_canny.append({
             "image": sample_name,
