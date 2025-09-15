@@ -159,11 +159,11 @@ def run_hed(input_path, output_path):
     # Convert PIL → numpy → tensor
     np_img = np.array(pil_img).astype(np.float32) / 255.0
     np_img = np_img[:, :, ::-1].transpose(2, 0, 1)  # RGB→BGR, CHW
-    tenInput = torch.FloatTensor(np.ascontiguousarray(np_img))
+    ten_input = torch.FloatTensor(np.ascontiguousarray(np_img))
 
-    tenOutput = estimate(tenInput)
+    ten_output = estimate(ten_input)
 
-    out_img = (tenOutput.clip(0.0, 1.0).numpy(force=True)
+    out_img = (ten_output.clip(0.0, 1.0).numpy(force=True)
                .transpose(1, 2, 0)[:, :, 0] * 255.0).astype(np.uint8)
     PIL.Image.fromarray(out_img).save(output_path)
 
