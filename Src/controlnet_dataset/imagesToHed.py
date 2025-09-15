@@ -6,17 +6,17 @@ import PIL
 import PIL.Image
 import sys
 import torch
+import numpy as np
 
 ##########################################################
 
-torch.set_grad_enabled(False) # make sure to not compute gradients for computational performance
-
-torch.backends.cudnn.enabled = True # make sure to use cudnn for computational performance
+torch.set_grad_enabled(False)  # no gradients
+torch.backends.cudnn.enabled = True  # use cudnn
 
 ##########################################################
 
-args_strModel = 'bsds500' # only 'bsds500' for now
-args_strIn = './images/sample.png'
+args_strModel = 'bsds500'
+args_strIn = './images/vino-rosso-aurum.png'
 args_strOut = './out.png'
 
 for strOption, strArg in getopt.getopt(sys.argv[1:], '', [
@@ -24,13 +24,14 @@ for strOption, strArg in getopt.getopt(sys.argv[1:], '', [
     'in=',
     'out=',
 ])[0]:
-    if strOption == '--model' and strArg != '': args_strModel = strArg # which model to use
-    if strOption == '--in' and strArg != '': args_strIn = strArg # path to the input image
-    if strOption == '--out' and strArg != '': args_strOut = strArg # path to where the output should be stored
+    if strOption == '--model' and strArg != '': args_strModel = strArg
+    if strOption == '--in' and strArg != '': args_strIn = strArg
+    if strOption == '--out' and strArg != '': args_strOut = strArg
 # end
 
 ##########################################################
-
+# Network definition (rest of your code unchanged)
+##########################################################
 class Network(torch.nn.Module):
     def __init__(self):
         super().__init__()
@@ -122,25 +123,9 @@ class Network(torch.nn.Module):
 
 netNetwork = None
 
-def run_hed(input_path, output_path):
-    global netNetwork
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    if netNetwork is None:
-        netNetwork = Network().to(device).eval()
-
-    img = PIL.Image.open(input_path).convert("RGB")
-    arr = numpy.array(img)[:, :, ::-1].transpose(2, 0, 1).astype(numpy.float32) * (1.0/255.0)
-    tenInput = torch.FloatTensor(numpy.ascontiguousarray(arr)).unsqueeze(0).to(device)
-
-    tenOutput = netNetwork(tenInput)[0].cpu().detach()
-    out_img = (tenOutput.squeeze().numpy() * 255.0).clip(0, 255).astype(numpy.uint8)
-    PIL.Image.fromarray(out_img).save(output_path)
 ##########################################################
-
 def estimate(ten_input):
     global netNetwork
-
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if netNetwork is None:
@@ -156,11 +141,33 @@ def estimate(ten_input):
 # end
 
 ##########################################################
+def load_image_safe(path):
+    """Load image safely, handle alpha, ensure RGB."""
+    pil_img = PIL.Image.open(path)
+    if pil_img.mode == "RGBA":
+        background = PIL.Image.new("RGB", pil_img.size, (255, 255, 255))
+        background.paste(pil_img, mask=pil_img.split()[3])
+        pil_img = background
+    else:
+        pil_img = pil_img.convert("RGB")
+    return pil_img
+# end
 
-if __name__ == '__main__':
-    tenInput = torch.FloatTensor(numpy.ascontiguousarray(numpy.array(PIL.Image.open(args_strIn))[:, :, ::-1].transpose(2, 0, 1).astype(numpy.float32) * (1.0 / 255.0)))
+def run_hed(input_path, output_path):
+    pil_img = load_image_safe(input_path)
+
+    # Convert PIL → numpy → tensor
+    np_img = np.array(pil_img).astype(np.float32) / 255.0
+    np_img = np_img[:, :, ::-1].transpose(2, 0, 1)  # RGB→BGR, CHW
+    tenInput = torch.FloatTensor(np.ascontiguousarray(np_img))
 
     tenOutput = estimate(tenInput)
 
-    PIL.Image.fromarray((tenOutput.clip(0.0, 1.0).numpy(force=True).transpose(1, 2, 0)[:, :, 0] * 255.0).astype(numpy.uint8)).save(args_strOut)
-# end
+    out_img = (tenOutput.clip(0.0, 1.0).numpy(force=True)
+               .transpose(1, 2, 0)[:, :, 0] * 255.0).astype(np.uint8)
+    PIL.Image.fromarray(out_img).save(output_path)
+
+##########################################################
+if __name__ == '__main__':
+    run_hed(args_strIn, args_strOut)
+    # end
