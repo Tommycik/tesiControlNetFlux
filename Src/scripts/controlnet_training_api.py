@@ -13,7 +13,7 @@ from datasets import load_dataset
 from pathlib import Path
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--prompt', type=str, default='transparent glass on white background, the bottom part of the glass presents light grooves')
+parser.add_argument('--prompt', type=str, default='transparent cocktail galss with elegant stem and a double curved bowl on a white background')
 parser.add_argument('--steps', type=int, default=1000)
 parser.add_argument('--gradient_accumulation_steps', type=int, default=4)
 parser.add_argument('--train_batch_size', type=int, default=2)
@@ -56,7 +56,7 @@ training_script = training_script.resolve()
 
 
 # Validation image
-validation_image_path = args.validation_image or "controlnet_dataset/images/sample_0000.jpg"
+validation_image_path = args.validation_image or "controlnet_dataset/validationImage/calice.jpg"
 validation_image_path = Path(__file__).resolve().parent.parent / validation_image_path
 validation_image_path = validation_image_path.resolve()
 if not validation_image_path.is_file():
