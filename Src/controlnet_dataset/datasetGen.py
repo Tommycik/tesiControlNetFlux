@@ -63,14 +63,14 @@ def generate_dataset():
         hed_path = OUT_BASE+"/"+IMAGES_HED_DIR + "/" + f"{Path(orig).stem}_hed.png"
 
         dataset_canny.append({
-            "file_name": sample_name,
-            "control": canny_path,
-            "caption": caption
+            "image": sample_name,
+            "condition_image": canny_path,
+            "prompt": caption
         })
         dataset_hed.append({
-            "file_name": sample_name,
-            "control": hed_path,
-            "caption": caption
+            "image": sample_name,
+            "condition_image": hed_path,
+            "prompt": caption
         })
 
     # Save JSONL files
