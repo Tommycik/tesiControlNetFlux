@@ -782,11 +782,19 @@ def prepare_train_dataset(dataset, accelerator):
         ]
     )
 
+    def safe_to_rgb(x, controlnet_type):
+        # Only fix channel count when NOT using canny
+        if controlnet_type.lower() != "canny":
+            if x.shape[0] != 3:
+                return x.repeat(3, 1, 1)
+        return x
+
     conditioning_image_transforms = transforms.Compose(
         [
             transforms.Resize(args.resolution, interpolation=interpolation),
             transforms.CenterCrop(args.resolution),
             transforms.ToTensor(),
+            transforms.Lambda(lambda x: safe_to_rgb(x, args.controlnet_type)),
             transforms.Normalize([0.5], [0.5]),
         ]
     )
