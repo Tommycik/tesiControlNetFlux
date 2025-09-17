@@ -142,7 +142,7 @@ def estimate(ten_input):
 
 ##########################################################
 def load_image_safe(path):
-    """Load image safely, handle alpha, ensure RGB."""
+    # Ensure RGB
     pil_img = PIL.Image.open(path)
     if pil_img.mode == "RGBA":
         background = PIL.Image.new("RGB", pil_img.size, (255, 255, 255))

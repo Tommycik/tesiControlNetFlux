@@ -14,4 +14,7 @@ cloudinary
 huggingface_hub
 tqdm
 pyyaml
+pathlib
 screen
+controlnet_aux
+pandas

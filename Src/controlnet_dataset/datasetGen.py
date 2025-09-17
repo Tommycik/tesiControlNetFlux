@@ -10,7 +10,6 @@ import numpy as np
 from PIL import Image
 import pandas as pd
 import torch
-import shutil
 
 IMAGES_DIR = "images"
 CAPTIONS_FILE = "New_Captition.txt"
@@ -52,7 +51,7 @@ def generate_dataset():
                 src = found
                 print(f"Found case-insensitive match for {orig} -> {src}")
             else:
-                print(f"⚠️ Warning: image not found: {src}. Skipping all captions for this filename.")
+                print(f"Warning: image not found: {src}. Skipping all captions for this filename.")
                 continue
 
         # keep original filename
@@ -74,7 +73,7 @@ def generate_dataset():
         })
 
     # Save JSONL files
-    with open( "dataset_canny.jsonl", "w", encoding="utf-8") as f:
+    with open("dataset_canny.jsonl", "w", encoding="utf-8") as f:
         for row in dataset_canny:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
@@ -82,9 +81,7 @@ def generate_dataset():
         for row in dataset_hed:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
-    print("✅ Dataset JSONL generated (keeping original image names).")
+    print("Dataset JSONL generated (keeping original image names).")
 
 if __name__ == "__main__":
-    # optionally silence the libpng iCCP warning if you still see it
-    warnings.filterwarnings("ignore", message=".*iCCP: known incorrect sRGB profile.*")
     generate_dataset()
