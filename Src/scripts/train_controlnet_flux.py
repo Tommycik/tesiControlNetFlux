@@ -1344,14 +1344,6 @@ def main(args):
                     control_latents.shape[3],
                 )
 
-                if args.controlnet_type.lower() == "hed":
-
-                    control_image = batch["conditioning_pixel_values"].to(dtype=weight_dtype)
-                    # Ensure it's 3 channels. The transforms already convert to RGB.
-                    # If the input image is truly HED (grayscale), you might need to convert it to 3 channels here.
-                    if control_image.shape[1] == 1:
-                        control_image = control_image.repeat(1, 3, 1, 1)  # Convert 1-channel to 3-channel by repeating
-
                 latent_image_ids = FluxControlNetPipeline._prepare_latent_image_ids(
                     batch_size=pixel_latents_tmp.shape[0],
                     height=pixel_latents_tmp.shape[2] // 2,
