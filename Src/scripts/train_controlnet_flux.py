@@ -824,7 +824,10 @@ def prepare_train_dataset(dataset, accelerator):
 
         conditioning_images = [load_pil_image(img) for img in examples[args.conditioning_image_column]]
         conditioning_images = [conditioning_image_transforms(img) for img in conditioning_images]
-
+        conditioning_images = [
+            img if img.shape[0] == 3 else img.repeat(3, 1, 1)
+            for img in conditioning_images
+        ]
         examples["pixel_values"] = images
         examples["conditioning_pixel_values"] = conditioning_images
 
