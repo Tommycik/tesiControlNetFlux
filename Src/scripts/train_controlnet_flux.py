@@ -786,24 +786,12 @@ def prepare_train_dataset(dataset, accelerator):
         # fallback for numpy arrays, byte arrays, etc.
         return Image.fromarray(np.array(x)).convert("RGB")
 
-    # Normalization done with a lambda so it's channel-agnostic:
-    # ToTensor() -> [0,1], then (x - 0.5)/0.5 -> [-1,1]
-    normalize_lambda = transforms.Lambda(lambda t: (t - 0.5) / 0.5)
-
-    # Will make sure non-canny control maps become 3-channel by repeating the single channel.
-    def safe_to_rgb_tensor(x):
-        # Always expand to 3 channels if single-channel input
-        if x.ndim == 3 and x.shape[0] == 1:
-            return x.repeat(3, 1, 1)
-        return x
-
     image_transforms = transforms.Compose(
         [
             transforms.Resize(args.resolution, interpolation=interpolation),
             transforms.CenterCrop(args.resolution),
             transforms.ToTensor(),
-            transforms.Lambda(lambda t: safe_to_rgb_tensor(t)),
-            normalize_lambda,
+            transforms.Normalize([0.5], [0.5]),
         ]
     )
 
@@ -811,9 +799,8 @@ def prepare_train_dataset(dataset, accelerator):
         [
             transforms.Resize(args.resolution, interpolation=interpolation),
             transforms.CenterCrop(args.resolution),
-            transforms.ToTensor(),  # -> [C, H, W], C might be 1 or 3
-            transforms.Lambda(lambda t: safe_to_rgb_tensor(t)),  # ensure 3-ch for HED etc
-            normalize_lambda,
+            transforms.ToTensor(),
+            transforms.Normalize([0.5], [0.5]),
         ]
     )
 
@@ -824,10 +811,12 @@ def prepare_train_dataset(dataset, accelerator):
 
         conditioning_images = [load_pil_image(img) for img in examples[args.conditioning_image_column]]
         conditioning_images = [conditioning_image_transforms(img) for img in conditioning_images]
-        conditioning_images = [
-            img if img.shape[0] == 3 else img.repeat(3, 1, 1)
-            for img in conditioning_images
-        ]
+        if args.controlnet_type.lower() == "hed":
+            conditioning_images = [
+                (img - img.min()) / (img.max() - img.min() + 1e-8)  # normalize to [0,1]
+                for img in conditioning_images
+            ]
+            conditioning_images = [(img - 0.5) / 0.5 for img in conditioning_images]
         examples["pixel_values"] = images
         examples["conditioning_pixel_values"] = conditioning_images
 
@@ -846,11 +835,8 @@ def collate_fn(examples):
     conditioning_pixel_values = torch.stack([example["conditioning_pixel_values"] for example in examples])
     conditioning_pixel_values = conditioning_pixel_values.to(memory_format=torch.contiguous_format).float()
 
-    # Safety: ensure conditioning images have 3 channels (C dimension == 3).
-    if conditioning_pixel_values.ndim == 4 and conditioning_pixel_values.shape[1] == 1:
-        conditioning_pixel_values = conditioning_pixel_values.repeat(1, 3, 1, 1)
-
     prompt_ids = torch.stack([torch.tensor(example["prompt_embeds"]) for example in examples])
+
     pooled_prompt_embeds = torch.stack([torch.tensor(example["pooled_prompt_embeds"]) for example in examples])
     text_ids = torch.stack([torch.tensor(example["text_ids"]) for example in examples])
 
@@ -1363,8 +1349,14 @@ def main(args):
                     control_latents.shape[2],
                     control_latents.shape[3],
                 )
-                if control_image.ndim == 4 and control_image.shape[1] == 1:
-                    control_image = control_image.repeat(1, 3, 1, 1)
+                if args.controlnet_type.lower() == "hed":
+
+                    control_image = batch["conditioning_pixel_values"].to(dtype=weight_dtype)
+                    # Ensure it's 3 channels. The transforms already convert to RGB.
+                    # If the input image is truly HED (grayscale), you might need to convert it to 3 channels here.
+                    if control_image.shape[1] == 1:
+                        control_image = control_image.repeat(1, 3, 1, 1)  # Convert 1-channel to 3-channel by repeating
+
                 latent_image_ids = FluxControlNetPipeline._prepare_latent_image_ids(
                     batch_size=pixel_latents_tmp.shape[0],
                     height=pixel_latents_tmp.shape[2] // 2,
