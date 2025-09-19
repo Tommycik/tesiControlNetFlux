@@ -93,7 +93,7 @@ pipe.to("cuda")
 
 controlnet_type_capitalized = args.controlnet_type.capitalize()
 
-control_img = args.control_image or f"controlnet_dataset/controlImagesDefault/boccale_{args.controlnet_type}.jpg"
+control_img = args.control_image or f"controlnet_dataset/controlImagesDefault/boccale_{args.controlnet_type}.png"
 control_img_path = Path(__file__).resolve().parent.parent / control_img
 control_img_path = control_img_path.resolve()
 

@@ -154,6 +154,10 @@ def log_validation(
 
         validation_image = load_image(validation_image)
         # maybe need to inference on 1024 to get a good image
+        if isinstance(validation_image, Image.Image):
+            validation_image = validation_image.convert("RGB")
+        else:
+            validation_image = Image.fromarray(np.array(validation_image)).convert("RGB")
         validation_image = validation_image.resize((args.resolution, args.resolution))
 
         images = []
@@ -773,6 +777,15 @@ def prepare_train_dataset(dataset, accelerator):
     if interpolation is None:
         raise ValueError(f"Unsupported interpolation mode {interpolation=}.")
 
+    # helper to robustly turn many image types into a PIL RGB image
+    def load_pil_image(x):
+        if isinstance(x, str):
+            return Image.open(x).convert("RGB")
+        if isinstance(x, Image.Image):
+            return x.convert("RGB")
+        # fallback for numpy arrays, byte arrays, etc.
+        return Image.fromarray(np.array(x)).convert("RGB")
+
     image_transforms = transforms.Compose(
         [
             transforms.Resize(args.resolution, interpolation=interpolation),
@@ -792,17 +805,20 @@ def prepare_train_dataset(dataset, accelerator):
     )
 
     def preprocess_train(examples):
-        images = [
-            (image.convert("RGB") if not isinstance(image, str) else Image.open(image).convert("RGB"))
-            for image in examples[args.image_column]
-        ]
-        images = [image_transforms(image) for image in images]
+        # Strongly prefer to treat all inputs as PIL and convert to RGB.
+        images = [load_pil_image(img) for img in examples[args.image_column]]
+        images = [image_transforms(img) for img in images]
 
-        conditioning_images = [
-            (image.convert("RGB") if not isinstance(image, str) else Image.open(image).convert("RGB"))
-            for image in examples[args.conditioning_image_column]
-        ]
-        conditioning_images = [conditioning_image_transforms(image) for image in conditioning_images]
+        conditioning_images = [load_pil_image(img) for img in examples[args.conditioning_image_column]]
+        # Ensure 3 channels
+        conditioning_images = [img.convert("RGB") for img in conditioning_images]
+        conditioning_images = [conditioning_image_transforms(img) for img in conditioning_images]
+        if args.controlnet_type.lower() == "hed":
+            conditioning_images = [
+                (img - img.min()) / (img.max() - img.min() + 1e-8)  # normalize to [0,1]
+                for img in conditioning_images
+            ]
+            conditioning_images = [(img - 0.5) / 0.5 for img in conditioning_images]
         examples["pixel_values"] = images
         examples["conditioning_pixel_values"] = conditioning_images
 
@@ -1335,7 +1351,6 @@ def main(args):
                     control_latents.shape[2],
                     control_latents.shape[3],
                 )
-
                 if args.controlnet_type.lower() == "hed":
 
                     control_image = batch["conditioning_pixel_values"].to(dtype=weight_dtype)

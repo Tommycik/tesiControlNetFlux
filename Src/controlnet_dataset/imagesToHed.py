@@ -142,7 +142,7 @@ def estimate(ten_input):
 
 ##########################################################
 def load_image_safe(path):
-    """Load image safely, handle alpha, ensure RGB."""
+    # Ensure RGB
     pil_img = PIL.Image.open(path)
     if pil_img.mode == "RGBA":
         background = PIL.Image.new("RGB", pil_img.size, (255, 255, 255))
@@ -159,12 +159,16 @@ def run_hed(input_path, output_path):
     # Convert PIL → numpy → tensor
     np_img = np.array(pil_img).astype(np.float32) / 255.0
     np_img = np_img[:, :, ::-1].transpose(2, 0, 1)  # RGB→BGR, CHW
-    tenInput = torch.FloatTensor(np.ascontiguousarray(np_img))
+    ten_input = torch.FloatTensor(np.ascontiguousarray(np_img))
 
-    tenOutput = estimate(tenInput)
+    ten_output = estimate(ten_input)
 
-    out_img = (tenOutput.clip(0.0, 1.0).numpy(force=True)
+    out_img = (ten_output.clip(0.0, 1.0).numpy(force=True)
                .transpose(1, 2, 0) * 255.0).astype(np.uint8)
+
+    # Ensure 3 channels (RGB)
+    out_img = np.repeat(out_img, 3, axis=2)
+
     PIL.Image.fromarray(out_img).save(output_path)
 
 ##########################################################

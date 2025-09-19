@@ -8,9 +8,9 @@ import numpy as np
 from imagesToHed import run_hed
 
 # Paths
-input_dir = "controlImagesDefault"
-canny_dir = "controlImagesDefault"
-hed_dir = "controlImagesDefault"
+input_dir = "images"
+canny_dir = "imagesControlCanny"
+hed_dir = "imagesControlHed"
 
 os.makedirs(canny_dir, exist_ok=True)
 os.makedirs(hed_dir, exist_ok=True)
@@ -39,13 +39,13 @@ for filename in os.listdir(input_dir):
         print(f"Skipping {filename}, invalid image: {e}")
         continue
 
-    # --- Canny ---
+    # Canny
     cv_img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
     gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
     edges = cv2.Canny(gray, 100, 200)
     cv2.imwrite(os.path.join(canny_dir, f"{name}_canny.png"), edges)
 
-    # --- HED (via imagesToHed) ---
+    # HED
     hed_out = os.path.join(hed_dir, f"{name}_hed.png")
     run_hed(filepath, hed_out)
 

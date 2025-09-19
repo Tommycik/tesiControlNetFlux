@@ -10,7 +10,6 @@ import numpy as np
 from PIL import Image
 import pandas as pd
 import torch
-import shutil
 
 IMAGES_DIR = "images"
 CAPTIONS_FILE = "New_Captition.txt"
@@ -52,29 +51,29 @@ def generate_dataset():
                 src = found
                 print(f"Found case-insensitive match for {orig} -> {src}")
             else:
-                print(f"⚠️ Warning: image not found: {src}. Skipping all captions for this filename.")
+                print(f"Warning: image not found: {src}. Skipping all captions for this filename.")
                 continue
 
         # keep original filename
         sample_name = OUT_BASE+"/"+IMAGES_DIR + "/" + f"{Path(orig).stem}.png"
 
         # JSONL rows: point to existing processed control images
-        canny_path = OUT_BASE+"/"+IMAGES_CANNY_DIR + "/" + f"{Path(orig).stem}_canny.png"
-        hed_path = OUT_BASE+"/"+IMAGES_HED_DIR + "/" + f"{Path(orig).stem}_hed.png"
+        canny_path = IMAGES_CANNY_DIR + "/" + f"{Path(orig).stem}_canny.png"
+        hed_path = IMAGES_HED_DIR + "/" + f"{Path(orig).stem}_hed.png"
 
         dataset_canny.append({
-            "file_name": sample_name,
-            "control": canny_path,
-            "caption": caption
+            "image": sample_name,
+            "condition_image": canny_path,
+            "prompt": caption
         })
         dataset_hed.append({
-            "file_name": sample_name,
-            "control": hed_path,
-            "caption": caption
+            "image": sample_name,
+            "condition_image": hed_path,
+            "prompt": caption
         })
 
     # Save JSONL files
-    with open( "dataset_canny.jsonl", "w", encoding="utf-8") as f:
+    with open("dataset_canny.jsonl", "w", encoding="utf-8") as f:
         for row in dataset_canny:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
@@ -82,9 +81,7 @@ def generate_dataset():
         for row in dataset_hed:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
-    print("✅ Dataset JSONL generated (keeping original image names).")
+    print("Dataset JSONL generated (keeping original image names).")
 
 if __name__ == "__main__":
-    # optionally silence the libpng iCCP warning if you still see it
-    warnings.filterwarnings("ignore", message=".*iCCP: known incorrect sRGB profile.*")
     generate_dataset()
