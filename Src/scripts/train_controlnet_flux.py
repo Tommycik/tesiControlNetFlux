@@ -792,20 +792,22 @@ def prepare_train_dataset(dataset, accelerator):
     )
 
     def preprocess_train(examples):
-        images = [
-            (image.convert("RGB") if not isinstance(image, str) else Image.open(image).convert("RGB"))
-            for image in examples[args.image_column]
-        ]
+        def ensure_rgb(image):
+            if isinstance(image, str):
+                image = Image.open(image)
+            elif isinstance(image, np.ndarray):
+                image = Image.fromarray(image)
+            return image.convert("RGB")
+
+        images = [ensure_rgb(image) for image in examples[args.image_column]]
         images = [image_transforms(image) for image in images]
 
-        conditioning_images = [
-            (image.convert("RGB") if not isinstance(image, str) else Image.open(image).convert("RGB"))
-            for image in examples[args.conditioning_image_column]
-        ]
+        conditioning_images = [ensure_rgb(image) for image in examples[args.conditioning_image_column]]
         conditioning_images = [conditioning_image_transforms(image) for image in conditioning_images]
+
         examples["pixel_values"] = images
         examples["conditioning_pixel_values"] = conditioning_images
-
+        print("pixel_values:", images[0].shape, "conditioning:", conditioning_images[0].shape)
         return examples
 
     with accelerator.main_process_first():
