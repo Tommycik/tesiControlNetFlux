@@ -791,13 +791,10 @@ def prepare_train_dataset(dataset, accelerator):
     normalize_lambda = transforms.Lambda(lambda t: (t - 0.5) / 0.5)
 
     # Will make sure non-canny control maps become 3-channel by repeating the single channel.
-    def safe_to_rgb_tensor(x, controlnet_type):
-        # x is a torch tensor in shape [C, H, W]
-        if controlnet_type is None:
-            return x
-        if controlnet_type.lower() != "canny":
-            if x.shape[0] == 1:
-                return x.repeat(3, 1, 1)
+    def safe_to_rgb_tensor(x, controlnet_type=None):
+        # Always expand to 3 channels if single-channel input
+        if x.ndim == 3 and x.shape[0] == 1:
+            return x.repeat(3, 1, 1)
         return x
 
     image_transforms = transforms.Compose(
