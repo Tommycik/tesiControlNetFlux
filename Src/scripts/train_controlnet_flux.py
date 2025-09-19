@@ -810,6 +810,8 @@ def prepare_train_dataset(dataset, accelerator):
         images = [image_transforms(img) for img in images]
 
         conditioning_images = [load_pil_image(img) for img in examples[args.conditioning_image_column]]
+        # Ensure 3 channels
+        conditioning_images = [img.convert("RGB") for img in conditioning_images]
         conditioning_images = [conditioning_image_transforms(img) for img in conditioning_images]
         if args.controlnet_type.lower() == "hed":
             conditioning_images = [
