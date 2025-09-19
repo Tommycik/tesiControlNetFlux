@@ -169,7 +169,7 @@ def run_hed(input_path, output_path):
     # Ensure 3 channels (RGB)
     out_img = np.repeat(out_img, 3, axis=2)
 
-    PIL.Image.fromarray(out_img).save(output_path)
+    PIL.Image.fromarray(out_img).convert("RGB").save(output_path)
 
 ##########################################################
 if __name__ == '__main__':
