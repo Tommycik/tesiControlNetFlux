@@ -1327,7 +1327,10 @@ def main(args):
                     pixel_latents_tmp.shape[3],
                 )
 
+                # vae encode for controlnet conditioning images if 1 channel repeat to 3 channels
                 control_values = batch["conditioning_pixel_values"].to(dtype=weight_dtype)
+                if control_values.shape[1] == 1:  # [B,1,H,W]
+                    control_values = control_values.repeat(1, 3, 1, 1)
                 control_latents = vae.encode(control_values).latent_dist.sample()
                 control_latents = (control_latents - vae.config.shift_factor) * vae.config.scaling_factor
                 control_image = FluxControlNetPipeline._pack_latents(
