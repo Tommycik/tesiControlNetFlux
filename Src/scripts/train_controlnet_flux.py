@@ -802,6 +802,7 @@ def prepare_train_dataset(dataset, accelerator):
             transforms.Resize(args.resolution, interpolation=interpolation),
             transforms.CenterCrop(args.resolution),
             transforms.ToTensor(),
+            transforms.Lambda(lambda t: safe_to_rgb_tensor(t)),
             normalize_lambda,
         ]
     )
