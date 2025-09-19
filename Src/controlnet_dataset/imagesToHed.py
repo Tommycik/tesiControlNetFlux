@@ -3,11 +3,12 @@
 import getopt
 import numpy
 import PIL
+from PIL import Image
 import PIL.Image
 import sys
 import torch
 import numpy as np
-
+import os
 ##########################################################
 
 torch.set_grad_enabled(False)  # no gradients
@@ -163,13 +164,23 @@ def run_hed(input_path, output_path):
 
     ten_output = estimate(ten_input)
 
-    out_img = (ten_output.clip(0.0, 1.0).numpy(force=True)
-               .transpose(1, 2, 0) * 255.0).astype(np.uint8)
+    ten_output = ten_output.squeeze().cpu().detach().numpy()  # (H, W)
+    out_img = (np.clip(ten_output, 0.0, 1.0) * 255.0).astype(np.uint8)
 
     # Ensure 3 channels (RGB)
-    out_img = np.repeat(out_img, 3, axis=2)
+    if out_img.ndim == 2:  # grayscale
+        out_img = np.stack([out_img] * 3, axis=-1)
 
-    PIL.Image.fromarray(out_img).convert("RGB").save(output_path)
+    # Define output path if not provided
+    if not output_path:
+        root, _ = os.path.splitext(input_path)
+        output_path = f"{root}_hed.png"
+
+    # Ensure parent directory exists
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+    # Save as RGB PNG
+    Image.fromarray(out_img).convert("RGB").save(output_path)
 
 ##########################################################
 if __name__ == '__main__':
