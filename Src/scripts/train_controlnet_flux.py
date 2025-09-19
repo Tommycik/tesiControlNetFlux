@@ -1363,7 +1363,8 @@ def main(args):
                     control_latents.shape[2],
                     control_latents.shape[3],
                 )
-
+                if control_image.ndim == 4 and control_image.shape[1] == 1:
+                    control_image = control_image.repeat(1, 3, 1, 1)
                 latent_image_ids = FluxControlNetPipeline._prepare_latent_image_ids(
                     batch_size=pixel_latents_tmp.shape[0],
                     height=pixel_latents_tmp.shape[2] // 2,
