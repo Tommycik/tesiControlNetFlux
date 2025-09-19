@@ -154,6 +154,10 @@ def log_validation(
 
         validation_image = load_image(validation_image)
         # maybe need to inference on 1024 to get a good image
+        if isinstance(validation_image, Image.Image):
+            validation_image = validation_image.convert("RGB")
+        else:
+            validation_image = Image.fromarray(np.array(validation_image)).convert("RGB")
         validation_image = validation_image.resize((args.resolution, args.resolution))
 
         images = []
@@ -773,44 +777,56 @@ def prepare_train_dataset(dataset, accelerator):
     if interpolation is None:
         raise ValueError(f"Unsupported interpolation mode {interpolation=}.")
 
+    # helper to robustly turn many image types into a PIL RGB image
+    def load_pil_image(x):
+        if isinstance(x, str):
+            return Image.open(x).convert("RGB")
+        if isinstance(x, Image.Image):
+            return x.convert("RGB")
+        # fallback for numpy arrays, byte arrays, etc.
+        return Image.fromarray(np.array(x)).convert("RGB")
+
+    # Normalization done with a lambda so it's channel-agnostic:
+    # ToTensor() -> [0,1], then (x - 0.5)/0.5 -> [-1,1]
+    normalize_lambda = transforms.Lambda(lambda t: (t - 0.5) / 0.5)
+
+    # Will make sure non-canny control maps become 3-channel by repeating the single channel.
+    def safe_to_rgb_tensor(x, controlnet_type):
+        # x is a torch tensor in shape [C, H, W]
+        if controlnet_type is None:
+            return x
+        if controlnet_type.lower() != "canny":
+            if x.shape[0] == 1:
+                return x.repeat(3, 1, 1)
+        return x
+
     image_transforms = transforms.Compose(
         [
             transforms.Resize(args.resolution, interpolation=interpolation),
             transforms.CenterCrop(args.resolution),
             transforms.ToTensor(),
-            transforms.Normalize([0.5], [0.5]),
+            normalize_lambda,
         ]
     )
-
-    def safe_to_rgb(x, controlnet_type):
-        # Only fix channel count when NOT using canny
-        if controlnet_type.lower() != "canny":
-            if x.shape[0] != 3:
-                return x.repeat(3, 1, 1)
-        return x
 
     conditioning_image_transforms = transforms.Compose(
         [
             transforms.Resize(args.resolution, interpolation=interpolation),
             transforms.CenterCrop(args.resolution),
-            transforms.ToTensor(),
-            transforms.Lambda(lambda x: safe_to_rgb(x, args.controlnet_type)),
-            transforms.Normalize([0.5], [0.5]),
+            transforms.ToTensor(),  # -> [C, H, W], C might be 1 or 3
+            transforms.Lambda(lambda t: safe_to_rgb_tensor(t, args.controlnet_type)),  # ensure 3-ch for HED etc
+            normalize_lambda,
         ]
     )
 
     def preprocess_train(examples):
-        images = [
-            (image.convert("RGB") if not isinstance(image, str) else Image.open(image).convert("RGB"))
-            for image in examples[args.image_column]
-        ]
-        images = [image_transforms(image) for image in images]
+        # Strongly prefer to treat all inputs as PIL and convert to RGB.
+        images = [load_pil_image(img) for img in examples[args.image_column]]
+        images = [image_transforms(img) for img in images]
 
-        conditioning_images = [
-            (image.convert("RGB") if not isinstance(image, str) else Image.open(image).convert("RGB"))
-            for image in examples[args.conditioning_image_column]
-        ]
-        conditioning_images = [conditioning_image_transforms(image) for image in conditioning_images]
+        conditioning_images = [load_pil_image(img) for img in examples[args.conditioning_image_column]]
+        conditioning_images = [conditioning_image_transforms(img) for img in conditioning_images]
+
         examples["pixel_values"] = images
         examples["conditioning_pixel_values"] = conditioning_images
 
@@ -829,8 +845,11 @@ def collate_fn(examples):
     conditioning_pixel_values = torch.stack([example["conditioning_pixel_values"] for example in examples])
     conditioning_pixel_values = conditioning_pixel_values.to(memory_format=torch.contiguous_format).float()
 
-    prompt_ids = torch.stack([torch.tensor(example["prompt_embeds"]) for example in examples])
+    # Safety: ensure conditioning images have 3 channels (C dimension == 3).
+    if conditioning_pixel_values.ndim == 4 and conditioning_pixel_values.shape[1] == 1:
+        conditioning_pixel_values = conditioning_pixel_values.repeat(1, 3, 1, 1)
 
+    prompt_ids = torch.stack([torch.tensor(example["prompt_embeds"]) for example in examples])
     pooled_prompt_embeds = torch.stack([torch.tensor(example["pooled_prompt_embeds"]) for example in examples])
     text_ids = torch.stack([torch.tensor(example["text_ids"]) for example in examples])
 
