@@ -792,19 +792,17 @@ def prepare_train_dataset(dataset, accelerator):
     )
 
     def preprocess_train(examples):
-        def ensure_rgb(image):
-            if isinstance(image, str):
-                image = Image.open(image)
-            elif isinstance(image, np.ndarray):
-                image = Image.fromarray(image)
-            return image.convert("RGB")
-
-        images = [ensure_rgb(image) for image in examples[args.image_column]]
+        images = [
+            (image.convert("RGB") if not isinstance(image, str) else Image.open(image).convert("RGB"))
+            for image in examples[args.image_column]
+        ]
         images = [image_transforms(image) for image in images]
 
-        conditioning_images = [ensure_rgb(image) for image in examples[args.conditioning_image_column]]
+        conditioning_images = [
+            (image.convert("RGB") if not isinstance(image, str) else Image.open(image).convert("RGB"))
+            for image in examples[args.conditioning_image_column]
+        ]
         conditioning_images = [conditioning_image_transforms(image) for image in conditioning_images]
-
         examples["pixel_values"] = images
         examples["conditioning_pixel_values"] = conditioning_images
         print("pixel_values:", images[0].shape, "conditioning:", conditioning_images[0].shape)
@@ -1327,12 +1325,24 @@ def main(args):
                     pixel_latents_tmp.shape[3],
                 )
 
-                #  encode for controlnet conditioning images if 1 channel repeat to 3 channels
                 control_values = batch["conditioning_pixel_values"].to(dtype=weight_dtype)
-                if control_values.shape[1] == 1:
-                    control_values = control_values.repeat(1, 3, 1, 1)
+                control_latents = vae.encode(control_values).latent_dist.sample()
+                control_latents = (control_latents - vae.config.shift_factor) * vae.config.scaling_factor
+                control_image = FluxControlNetPipeline._pack_latents(
+                    control_latents,
+                    control_values.shape[0],
+                    control_latents.shape[1],
+                    control_latents.shape[2],
+                    control_latents.shape[3],
+                )
 
-                control_image = control_values
+                # if args.controlnet_type.lower() == "hed":
+                #
+                #     control_image = batch["conditioning_pixel_values"].to(dtype=weight_dtype)
+                #     # Ensure it's 3 channels. The transforms already convert to RGB.
+                #     # If the input image is truly HED (grayscale), you might need to convert it to 3 channels here.
+                #     if control_image.shape[1] == 1:
+                #         control_image = control_image.repeat(1, 3, 1, 1)  # Convert 1-channel to 3-channel by repeating
 
                 latent_image_ids = FluxControlNetPipeline._prepare_latent_image_ids(
                     batch_size=pixel_latents_tmp.shape[0],

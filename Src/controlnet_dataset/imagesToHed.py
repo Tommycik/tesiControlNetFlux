@@ -167,9 +167,17 @@ def run_hed(input_path, output_path):
     ten_output = ten_output.squeeze().cpu().detach().numpy()  # (H, W)
     out_img = (np.clip(ten_output, 0.0, 1.0) * 255.0).astype(np.uint8)
 
+    import cv2
+    # 1. Binarize (threshold)
+    _, out_img = cv2.threshold(out_img, 50, 255, cv2.THRESH_BINARY)
+
+    # 2. Dilate to thicken edges
+    kernel = np.ones((1.5, 1.5), np.uint8)
+    out_img = cv2.dilate(out_img, kernel, iterations=1)
+
     # Ensure 3 channels (RGB)
-    if out_img.ndim == 2:  # grayscale
-        out_img = np.stack([out_img] * 3, axis=-1)
+    if out_img.ndim == 2:
+        out_img = np.stack([out_img] * 3, axis=-1).astype(np.uint8)
 
     # Define output path if not provided
     if not output_path:
@@ -179,8 +187,8 @@ def run_hed(input_path, output_path):
     # Ensure parent directory exists
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-    # Save as RGB PNG
-    Image.fromarray(out_img).convert("RGB").save(output_path)
+    # Save explicitly as RGB PNG
+    Image.fromarray(out_img, mode="RGB").save(output_path, format="PNG")
 
 ##########################################################
 if __name__ == '__main__':

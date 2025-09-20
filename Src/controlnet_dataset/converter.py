@@ -8,9 +8,10 @@ import numpy as np
 from imagesToHed import run_hed
 
 # Paths
-input_dir = "images"
-canny_dir = "imagesControlCanny"
-hed_dir = "imagesControlHed"
+script_dir = os.path.dirname(os.path.abspath(__file__))
+input_dir = os.path.join(script_dir, "images")
+canny_dir = os.path.join(script_dir, "imagesControlCanny")
+hed_dir = os.path.join(script_dir, "imagesControlHed")
 
 os.makedirs(canny_dir, exist_ok=True)
 os.makedirs(hed_dir, exist_ok=True)
