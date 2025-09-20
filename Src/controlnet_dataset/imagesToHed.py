@@ -170,7 +170,7 @@ def run_hed(input_path, output_path):
     import cv2
 
     # 1. Quantize to discrete grayscale levels (instead of hard binary)
-    levels = 16  # 4, 8, or 16 depending on detail vs. stability
+    levels = 32  # 4, 8, 16 or 32 depending on detail vs. stability
     step = 255 // levels
     out_img = (out_img // step) * step
 
