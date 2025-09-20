@@ -172,7 +172,7 @@ def run_hed(input_path, output_path):
     _, out_img = cv2.threshold(out_img, 50, 255, cv2.THRESH_BINARY)
 
     # 2. Dilate to thicken edges
-    kernel = np.ones((1.5, 1.5), np.uint8)
+    kernel = np.ones((2, 2), np.uint8)
     out_img = cv2.dilate(out_img, kernel, iterations=1)
 
     # Ensure 3 channels (RGB)

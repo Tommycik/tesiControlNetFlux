@@ -82,7 +82,7 @@ if is_torch_npu_available():
 
 
 def log_validation(
-    vae, flux_transformer, flux_controlnet, args, accelerator, weight_dtype, step, is_final_validation=False
+        vae, flux_transformer, flux_controlnet, args, accelerator, weight_dtype, step, is_final_validation=False
 ):
     logger.info("Running validation... ")
 
@@ -286,7 +286,7 @@ def parse_args(input_args=None):
         type=str,
         default=None,
         help="Path to pretrained controlnet model or model identifier from huggingface.co/models."
-        " If not specified controlnet weights are initialized from unet.",
+             " If not specified controlnet weights are initialized from unet.",
     )
     parser.add_argument(
         "--variant",
@@ -694,11 +694,11 @@ def parse_args(input_args=None):
         raise ValueError("`--validation_prompt` must be set if `--validation_image` is set")
 
     if (
-        args.validation_image is not None
-        and args.validation_prompt is not None
-        and len(args.validation_image) != 1
-        and len(args.validation_prompt) != 1
-        and len(args.validation_image) != len(args.validation_prompt)
+            args.validation_image is not None
+            and args.validation_prompt is not None
+            and len(args.validation_image) != 1
+            and len(args.validation_prompt) != 1
+            and len(args.validation_image) != len(args.validation_prompt)
     ):
         raise ValueError(
             "Must provide either 1 `--validation_image`, 1 `--validation_prompt`,"
@@ -850,7 +850,7 @@ def main(args):
         )
 
     accelerator_project_config = ProjectConfiguration(project_dir=args.output_dir, logging_dir=str(logging_out_dir))
-    if not args.N4 :
+    if not args.N4:
         accelerator = Accelerator(
             gradient_accumulation_steps=args.gradient_accumulation_steps,
             mixed_precision=args.mixed_precision,
@@ -1088,7 +1088,7 @@ def main(args):
 
     if args.scale_lr:
         args.learning_rate = (
-            args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size * accelerator.num_processes
+                args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size * accelerator.num_processes
         )
 
     # Use 8-bit Adam for lower memory usage or to fine-tune the model in 16GB GPUs
@@ -1137,7 +1137,7 @@ def main(args):
 
     vae.to(accelerator.device, dtype=weight_dtype)
     if args.N4:
-        flux_transformer.to(accelerator.device)#, dtype=weight_dtype tolto perché modello quantizzato
+        flux_transformer.to(accelerator.device)  #, dtype=weight_dtype tolto perché modello quantizzato
     else:
         flux_transformer.to(accelerator.device, dtype=weight_dtype)
 
@@ -1202,7 +1202,7 @@ def main(args):
         len_train_dataloader_after_sharding = math.ceil(len(train_dataloader) / accelerator.num_processes)
         num_update_steps_per_epoch = math.ceil(len_train_dataloader_after_sharding / args.gradient_accumulation_steps)
         num_training_steps_for_scheduler = (
-            args.num_train_epochs * num_update_steps_per_epoch * accelerator.num_processes
+                args.num_train_epochs * num_update_steps_per_epoch * accelerator.num_processes
         )
     else:
         num_training_steps_for_scheduler = args.max_train_steps * accelerator.num_processes
@@ -1336,13 +1336,13 @@ def main(args):
                     control_latents.shape[3],
                 )
 
-                # if args.controlnet_type.lower() == "hed":
-                #
-                #     control_image = batch["conditioning_pixel_values"].to(dtype=weight_dtype)
-                #     # Ensure it's 3 channels. The transforms already convert to RGB.
-                #     # If the input image is truly HED (grayscale), you might need to convert it to 3 channels here.
-                #     if control_image.shape[1] == 1:
-                #         control_image = control_image.repeat(1, 3, 1, 1)  # Convert 1-channel to 3-channel by repeating
+                if args.controlnet_type.lower() == "hed":
+
+                    control_image = batch["conditioning_pixel_values"].to(dtype=weight_dtype)
+                    # Ensure it's 3 channels. The transforms already convert to RGB.
+                    # If the input image is truly HED (grayscale), you might need to convert it to 3 channels here.
+                    if control_image.shape[1] == 1:
+                        control_image = control_image.repeat(1, 3, 1, 1)  # Convert 1-channel to 3-channel by repeating
 
                 latent_image_ids = FluxControlNetPipeline._prepare_latent_image_ids(
                     batch_size=pixel_latents_tmp.shape[0],
