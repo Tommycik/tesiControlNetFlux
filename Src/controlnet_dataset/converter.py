@@ -47,7 +47,7 @@ for filename in os.listdir(input_dir):
     cv2.imwrite(os.path.join(canny_dir, f"{name}_canny.png"), edges)
 
     # HED
-    hed_out = os.path.join(hed_dir, f"{name}_hed.png")
+    hed_out = os.path.join(hed_dir, f"{name}_hed.jpg")
     run_hed(filepath, hed_out)
 
 print("Done.")

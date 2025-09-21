@@ -170,7 +170,7 @@ def run_hed(input_path, output_path):
     import cv2
 
     # 1. Quantize to discrete grayscale levels (instead of hard binary)
-    levels = 32  # 4, 8, 16 or 32 depending on detail vs. stability
+    levels = 128  # 4, 8, 16 or 32 depending on detail vs. stability
     step = 255 // levels
     out_img = (out_img // step) * step
 
@@ -185,13 +185,13 @@ def run_hed(input_path, output_path):
     # Define output path if not provided
     if not output_path:
         root, _ = os.path.splitext(input_path)
-        output_path = f"{root}_hed.png"
+        output_path = f"{root}_hed.jpg"
 
     # Ensure parent directory exists
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
     # Save explicitly as RGB PNG
-    Image.fromarray(out_img, mode="RGB").save(output_path, format="PNG")
+    Image.fromarray(out_img, mode="RGB").save(output_path, format="JPEG")
 
 ##########################################################
 if __name__ == '__main__':
