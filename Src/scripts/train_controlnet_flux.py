@@ -1371,19 +1371,19 @@ def main(args):
                 noisy_model_input = (1.0 - sigmas) * pixel_latents + sigmas * noise
 
                 #macthing dtype
-                param_dtype = next(flux_controlnet.parameters()).dtype
+                compute_dtype = weight_dtype
                 # noisy_model_input: ensure same dtype as model params
-                if noisy_model_input.dtype != param_dtype:
-                    noisy_model_input = noisy_model_input.to(dtype=param_dtype)
+                if noisy_model_input.dtype != compute_dtype:
+                    noisy_model_input = noisy_model_input.to(dtype=compute_dtype)
 
                 # control image / conditioning
-                if control_image.dtype != param_dtype:
-                    control_image = control_image.to(dtype=param_dtype)
+                if control_image.dtype != compute_dtype:
+                    control_image = control_image.to(dtype=compute_dtype)
 
                 # pooled prompt embeddings and encoder hidden states: cast to param dtype
-                pooled_projections = batch["unet_added_conditions"]["pooled_prompt_embeds"].to(dtype=param_dtype)
-                encoder_hidden_states = batch["prompt_ids"].to(dtype=param_dtype)
-                print("param_dtype:", param_dtype)
+                pooled_projections = batch["unet_added_conditions"]["pooled_prompt_embeds"].to(dtype=compute_dtype)
+                encoder_hidden_states = batch["prompt_ids"].to(dtype=compute_dtype)
+                print("param_dtype:", compute_dtype)
                 print("noisy_model_input.dtype:", noisy_model_input.dtype)
                 print("control_image.dtype:", control_image.dtype)
                 print("pooled_projections.dtype:", pooled_projections.dtype)
