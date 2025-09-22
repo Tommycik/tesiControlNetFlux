@@ -68,7 +68,7 @@ except ImportError:
 from transformers import BitsAndBytesConfig
 
 #N4
-bnb_config = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.bfloat16)
+bnb_config = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.float16)
 
 if is_wandb_available():
     import wandb
@@ -1130,14 +1130,14 @@ def main(args):
     # For mixed precision training we cast the text_encoder and vae weights to half-precision
     # as these models are only used for inference, keeping weights in full precision is not required.
     weight_dtype = torch.float32
-    if (accelerator.mixed_precision == "fp16"):
+    if (accelerator.mixed_precision == "fp16") or args.N4:
         weight_dtype = torch.float16
-    elif accelerator.mixed_precision == "bf16" or args.N4:
+    elif accelerator.mixed_precision == "bf16":
         weight_dtype = torch.bfloat16
 
     vae.to(accelerator.device, dtype=weight_dtype)
     if args.N4:
-        flux_transformer.to(accelerator.device)  #, dtype=weight_dtype tolto perché modello quantizzato
+        flux_transformer.to(accelerator.device)#, dtype=weight_dtype tolto perché modello quantizzato
     else:
         flux_transformer.to(accelerator.device, dtype=weight_dtype)
 
@@ -1370,24 +1370,6 @@ def main(args):
                 sigmas = get_sigmas(timesteps, n_dim=pixel_latents.ndim, dtype=pixel_latents.dtype)
                 noisy_model_input = (1.0 - sigmas) * pixel_latents + sigmas * noise
 
-                #macthing dtype
-                compute_dtype = weight_dtype
-                # noisy_model_input: ensure same dtype as model params
-                if noisy_model_input.dtype != compute_dtype:
-                    noisy_model_input = noisy_model_input.to(dtype=compute_dtype)
-
-                # control image / conditioning
-                if control_image.dtype != compute_dtype:
-                    control_image = control_image.to(dtype=compute_dtype)
-
-                # pooled prompt embeddings and encoder hidden states: cast to param dtype
-                pooled_projections = batch["unet_added_conditions"]["pooled_prompt_embeds"].to(dtype=compute_dtype)
-                encoder_hidden_states = batch["prompt_ids"].to(dtype=compute_dtype)
-                print("param_dtype:", compute_dtype)
-                print("noisy_model_input.dtype:", noisy_model_input.dtype)
-                print("control_image.dtype:", control_image.dtype)
-                print("pooled_projections.dtype:", pooled_projections.dtype)
-                print("encoder_hidden_states.dtype:", encoder_hidden_states.dtype)
                 # handle guidance
                 if flux_transformer.config.guidance_embeds:
                     guidance_vec = torch.full(
@@ -1404,8 +1386,8 @@ def main(args):
                     controlnet_cond=control_image,
                     timestep=timesteps / 1000,
                     guidance=guidance_vec,
-                    pooled_projections=pooled_projections,
-                    encoder_hidden_states=encoder_hidden_states,
+                    pooled_projections=batch["unet_added_conditions"]["pooled_prompt_embeds"].to(dtype=weight_dtype),
+                    encoder_hidden_states=batch["prompt_ids"].to(dtype=weight_dtype),
                     txt_ids=batch["unet_added_conditions"]["time_ids"][0].to(dtype=weight_dtype),
                     img_ids=latent_image_ids,
                     return_dict=False,
