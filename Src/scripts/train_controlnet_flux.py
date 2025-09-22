@@ -1137,7 +1137,7 @@ def main(args):
 
     vae.to(accelerator.device, dtype=weight_dtype)
     if args.N4:
-        flux_transformer.to(accelerator.device,)  #, dtype=weight_dtype tolto perché modello quantizzato
+        flux_transformer.to(accelerator.device)  #, dtype=weight_dtype tolto perché modello quantizzato
     else:
         flux_transformer.to(accelerator.device, dtype=weight_dtype)
 
