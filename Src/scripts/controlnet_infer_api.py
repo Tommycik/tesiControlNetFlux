@@ -92,8 +92,15 @@ else:
 pipe.to("cuda")
 
 controlnet_type_capitalized = args.controlnet_type.capitalize()
+type = args.controlnet_type.lower()
+image_default = None
+if type == "hed":
+    image_default = "boccale_hed.jpg"
+elif type == "canny":
+    image_default = "boccale_canny.png"
 
-control_img = args.control_image or f"controlnet_dataset/controlImagesDefault/boccale_{args.controlnet_type}.png"
+
+control_img = args.control_image or f"controlnet_dataset/controlImagesDefault/{image_default}"
 control_img_path = Path(__file__).resolve().parent.parent / control_img
 control_img_path = control_img_path.resolve()
 
