@@ -98,6 +98,8 @@ if type == "hed":
     image_default = "boccale_hed.jpg"
 elif type == "canny":
     image_default = "boccale_canny.png"
+else:
+    image_default = "boccale_canny.png"
 
 
 control_img = args.control_image or f"controlnet_dataset/controlImagesDefault/{image_default}"
