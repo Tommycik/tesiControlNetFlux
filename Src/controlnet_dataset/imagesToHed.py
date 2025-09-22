@@ -164,23 +164,8 @@ def run_hed(input_path, output_path):
 
     ten_output = estimate(ten_input)
 
-    ten_output = ten_output.squeeze().cpu().detach().numpy()  # (H, W)
-    out_img = (np.clip(ten_output, 0.0, 1.0) * 255.0).astype(np.uint8)
-
-    import cv2
-
-    # 1. Quantize to discrete grayscale levels
-    levels = 128  # 4, 8, 16 or 32 depending on detail vs. stability
-    step = 255 // levels
-    out_img = (out_img // step) * step
-
-    # 2. Optional: Dilate slightly to emphasize lines
-    kernel = np.ones((1, 1), np.uint8)
-    out_img = cv2.dilate(out_img, kernel, iterations=1)
-
-    # Ensure 3 channels (RGB)
-    if out_img.ndim == 2:
-        out_img = np.stack([out_img] * 3, axis=-1).astype(np.uint8)
+    out_img = (ten_output.clip(0.0, 1.0).numpy(force=True)
+               .transpose(1, 2, 0)[:, :, 0] * 255.0).astype(np.uint8)
 
     # Define output path if not provided
     if not output_path:
