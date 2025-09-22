@@ -1380,7 +1380,8 @@ def main(args):
                     )
                 else:
                     guidance_vec = None
-                    #macthing dtype
+
+                #macthing dtype
                 param_dtype = next(flux_controlnet.parameters()).dtype
                 if control_image.dtype != param_dtype:
                     control_image = control_image.to(dtype=param_dtype)
