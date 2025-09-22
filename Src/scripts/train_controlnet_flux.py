@@ -1380,6 +1380,10 @@ def main(args):
                     )
                 else:
                     guidance_vec = None
+                    #macthing dtype
+                param_dtype = next(flux_controlnet.parameters()).dtype
+                if control_image.dtype != param_dtype:
+                    control_image = control_image.to(dtype=param_dtype)
 
                 controlnet_block_samples, controlnet_single_block_samples = flux_controlnet(
                     hidden_states=noisy_model_input,
