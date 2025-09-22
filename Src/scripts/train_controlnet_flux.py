@@ -1370,6 +1370,24 @@ def main(args):
                 sigmas = get_sigmas(timesteps, n_dim=pixel_latents.ndim, dtype=pixel_latents.dtype)
                 noisy_model_input = (1.0 - sigmas) * pixel_latents + sigmas * noise
 
+                #macthing dtype
+                param_dtype = next(flux_controlnet.parameters()).dtype
+                # noisy_model_input: ensure same dtype as model params
+                if noisy_model_input.dtype != param_dtype:
+                    noisy_model_input = noisy_model_input.to(dtype=param_dtype)
+
+                # control image / conditioning
+                if control_image.dtype != param_dtype:
+                    control_image = control_image.to(dtype=param_dtype)
+
+                # pooled prompt embeddings and encoder hidden states: cast to param dtype
+                pooled_projections = batch["unet_added_conditions"]["pooled_prompt_embeds"].to(dtype=param_dtype)
+                encoder_hidden_states = batch["prompt_ids"].to(dtype=param_dtype)
+                print("param_dtype:", param_dtype)
+                print("noisy_model_input.dtype:", noisy_model_input.dtype)
+                print("control_image.dtype:", control_image.dtype)
+                print("pooled_projections.dtype:", pooled_projections.dtype)
+                print("encoder_hidden_states.dtype:", encoder_hidden_states.dtype)
                 # handle guidance
                 if flux_transformer.config.guidance_embeds:
                     guidance_vec = torch.full(
@@ -1381,18 +1399,13 @@ def main(args):
                 else:
                     guidance_vec = None
 
-                #macthing dtype
-                param_dtype = next(flux_controlnet.parameters()).dtype
-                if control_image.dtype != param_dtype:
-                    control_image = control_image.to(dtype=param_dtype)
-
                 controlnet_block_samples, controlnet_single_block_samples = flux_controlnet(
                     hidden_states=noisy_model_input,
                     controlnet_cond=control_image,
                     timestep=timesteps / 1000,
                     guidance=guidance_vec,
-                    pooled_projections=batch["unet_added_conditions"]["pooled_prompt_embeds"].to(dtype=weight_dtype),
-                    encoder_hidden_states=batch["prompt_ids"].to(dtype=weight_dtype),
+                    pooled_projections=pooled_projections,
+                    encoder_hidden_states=encoder_hidden_states,
                     txt_ids=batch["unet_added_conditions"]["time_ids"][0].to(dtype=weight_dtype),
                     img_ids=latent_image_ids,
                     return_dict=False,
