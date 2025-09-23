@@ -1,6 +1,6 @@
 # Codice per l'inferenza e il fine tuning di una Controlnet e del modello Flux
 
-**Ciccotti Tommaso.**
+**Ciccotti Tommaso**
 
 Il codice fa uso della libreria Diffusers ed è necessario un account Hugging Face per usare il codice.
 Questo perché le due controlnet di partenza e il modello di base richiedono un account valido e una richiesta d'uso.
