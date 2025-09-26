@@ -27,7 +27,7 @@ def line_tqdm(*args, **kwargs):
         file=sys.stdout,
         dynamic_ncols=False
     ))
-    # critical: disable carriage return
+    # disable carriage return
     t = original_tqdm(*args, **kwargs)
     t.display = lambda msg=None, pos=None: sys.stdout.write((msg or t.__str__()) + "\n") or sys.stdout.flush()
     return t
